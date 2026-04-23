@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Washi cream background with rounded corners -->
+  <rect width="512" height="512" rx="96" fill="#f4ead8"/>
+  <rect width="512" height="512" rx="96" fill="none" stroke="#d4c8b0" stroke-width="6"/>
+
+  <!-- Crossed shinai blades (sumi ink) -->
+  <rect x="-16" y="244" width="544" height="22" rx="11" fill="#18110a"
+        transform="rotate(-36 256 255)"/>
+  <rect x="-16" y="244" width="544" height="22" rx="11" fill="#18110a"
+        transform="rotate(36 256 255)"/>
+
+  <!-- Tsuba (guard) — concentric rings, vermillion / cream / vermillion -->
+  <circle cx="256" cy="256" r="52" fill="#c43518"/>
+  <circle cx="256" cy="256" r="36" fill="#f4ead8"/>
+  <circle cx="256" cy="256" r="16" fill="#c43518"/>
+
+  <!-- Subtle bottom accent bar -->
+  <rect x="96" y="418" width="320" height="6" rx="3" fill="#c43518" opacity="0.35"/>
+</svg>

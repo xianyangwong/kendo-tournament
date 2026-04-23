@@ -1,0 +1,25 @@
+{
+  "name": "Kendo Tournament Builder",
+  "short_name": "Kendo",
+  "description": "Manage kendo tournaments — single and team matches, live brackets, scorekeeping.",
+  "start_url": "/kendo-tournament/",
+  "scope": "/kendo-tournament/",
+  "display": "standalone",
+  "orientation": "landscape-primary",
+  "background_color": "#f4ead8",
+  "theme_color": "#18110a",
+  "icons": [
+    {
+      "src": "/kendo-tournament/pwa-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/kendo-tournament/pwa-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}
