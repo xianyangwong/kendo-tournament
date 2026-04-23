@@ -1712,10 +1712,6 @@ function TournamentWorkbench({
         ...bracket.finalRounds,
       ])
     : null
-  const progress =
-    bracket && bracket.totalMatches > 0
-      ? Math.round((bracket.completedMatches / bracket.totalMatches) * 100)
-      : 0
 
   const scores = tournament.scores ?? {}
   const showScoring = tournament.kind === 'single'
