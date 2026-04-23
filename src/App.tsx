@@ -534,28 +534,35 @@ function MatchCard({
             onReset={() => onTimerReset?.(match.id)}
             onExpire={() => onTimerExpire?.(match.id)}
           />
-          {([{ slot: match.left, side: 'left' as const }, { slot: match.right, side: 'right' as const }]).map(
-            ({ slot, side }) => {
-              const entrant = slot.entrant
-              const score = side === 'left' ? (matchScore?.left ?? 0) : (matchScore?.right ?? 0)
-              const isWinner = entrant?.id === match.selectedWinnerId
-              return (
-                <div
-                  key={side}
-                  className={`score-slot${isWinner ? ' is-winner' : ''}${slot.isBye ? ' is-bye' : ''}`}
-                >
-                  <span className="score-slot-name">{slot.label}</span>
-                  <ScorePlate
-                    score={score}
-                    side={side}
-                    disabled={!entrant || scoringLocked}
-                    canScore={!!entrant && !scoringLocked}
-                    onScore={(amount) => entrant && onAddScore?.(match.id, side, amount)}
-                  />
-                </div>
-              )
-            },
-          )}
+          <div className="match-scoring-row">
+            {([{ slot: match.left, side: 'left' as const }, { slot: match.right, side: 'right' as const }]).map(
+              ({ slot, side }, idx) => {
+                const entrant = slot.entrant
+                const score = side === 'left' ? (matchScore?.left ?? 0) : (matchScore?.right ?? 0)
+                const isWinner = entrant?.id === match.selectedWinnerId
+                return (
+                  <>
+                    {idx === 1 && (
+                      <span className="match-vs-kanji" aria-hidden="true">対</span>
+                    )}
+                    <div
+                      key={side}
+                      className={`score-slot score-slot-${side}${isWinner ? ' is-winner' : ''}${slot.isBye ? ' is-bye' : ''}`}
+                    >
+                      <span className="score-slot-name">{slot.label}</span>
+                      <ScorePlate
+                        score={score}
+                        side={side}
+                        disabled={!entrant || scoringLocked}
+                        canScore={!!entrant && !scoringLocked}
+                        onScore={(amount) => entrant && onAddScore?.(match.id, side, amount)}
+                      />
+                    </div>
+                  </>
+                )
+              },
+            )}
+          </div>
           {timeExpired && !match.isComplete ? (
             <div className="timer-expired-block">
               <p className="timer-expired-note">Time — bout drawn. Pick a winner to advance the bracket.</p>
@@ -1220,6 +1227,29 @@ function HomePage({
   const upcomingTournaments = tournaments.filter((t) => getTournamentStatus(t) === 'upcoming')
   const pastTournaments = tournaments.filter((t) => getTournamentStatus(t) === 'past')
 
+  const [tab, setTab] = useState<TournamentStatus>(() => {
+    if (activeTournaments.length) return 'active'
+    if (upcomingTournaments.length) return 'upcoming'
+    if (pastTournaments.length) return 'past'
+    return 'active'
+  })
+
+  const tabs: { key: TournamentStatus; label: string; count: number }[] = [
+    { key: 'active', label: 'Active', count: activeTournaments.length },
+    { key: 'upcoming', label: 'Upcoming', count: upcomingTournaments.length },
+    { key: 'past', label: 'Past', count: pastTournaments.length },
+  ]
+
+  const currentList =
+    tab === 'active' ? activeTournaments : tab === 'upcoming' ? upcomingTournaments : pastTournaments
+  const canDelete = tab !== 'active'
+  const emptyCopy =
+    tab === 'active'
+      ? { h: 'No active tournaments', p: 'Tournaments appear here once the first bout is scored.' }
+      : tab === 'upcoming'
+      ? { h: 'No upcoming tournaments', p: 'Create a new bracket to queue up an event.' }
+      : { h: 'No completed tournaments yet', p: 'Finished events will appear here once a champion has been decided.' }
+
   return (
     <AppFrame
       action={
@@ -1239,78 +1269,36 @@ function HomePage({
       </section>
 
       <section className="list-section">
-        <div className="section-header-row">
-          <div>
-            <p className="eyebrow">In progress</p>
-            <h2>Active tournaments</h2>
-          </div>
-          <span>{activeTournaments.length} live</span>
+        <div className="tournament-tabs" role="tablist">
+          {tabs.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              role="tab"
+              aria-selected={tab === t.key}
+              className={`tournament-tab${tab === t.key ? ' is-active' : ''}`}
+              onClick={() => setTab(t.key)}
+            >
+              <span>{t.label}</span>
+              <em>{t.count}</em>
+            </button>
+          ))}
         </div>
 
-        {activeTournaments.length > 0 ? (
+        {currentList.length > 0 ? (
           <div className="tournament-grid">
-            {activeTournaments.map((tournament) => (
-              <TournamentCard key={tournament.id} tournament={tournament} />
-            ))}
-          </div>
-        ) : (
-          <div className="empty-card">
-            <h3>No active tournaments</h3>
-            <p>Tournaments appear here once the first bout is scored.</p>
-          </div>
-        )}
-      </section>
-
-      <section className="list-section">
-        <div className="section-header-row">
-          <div>
-            <p className="eyebrow">Not started</p>
-            <h2>Upcoming tournaments</h2>
-          </div>
-          <span>{upcomingTournaments.length} pending</span>
-        </div>
-
-        {upcomingTournaments.length > 0 ? (
-          <div className="tournament-grid">
-            {upcomingTournaments.map((tournament) => (
+            {currentList.map((tournament) => (
               <TournamentCard
                 key={tournament.id}
                 tournament={tournament}
-                onDelete={onDeleteTournament}
+                onDelete={canDelete ? onDeleteTournament : undefined}
               />
             ))}
           </div>
         ) : (
           <div className="empty-card">
-            <h3>No upcoming tournaments</h3>
-            <p>Create a new bracket to queue up an event.</p>
-          </div>
-        )}
-      </section>
-
-      <section className="list-section">
-        <div className="section-header-row">
-          <div>
-            <p className="eyebrow">Archive</p>
-            <h2>Past tournaments</h2>
-          </div>
-          <span>{pastTournaments.length} completed</span>
-        </div>
-
-        {pastTournaments.length > 0 ? (
-          <div className="tournament-grid">
-            {pastTournaments.map((tournament) => (
-              <TournamentCard
-                key={tournament.id}
-                tournament={tournament}
-                onDelete={onDeleteTournament}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="empty-card">
-            <h3>No completed tournaments yet</h3>
-            <p>Finished events will appear here once a champion has been decided.</p>
+            <h3>{emptyCopy.h}</h3>
+            <p>{emptyCopy.p}</p>
           </div>
         )}
       </section>
@@ -1320,11 +1308,13 @@ function HomePage({
 
 function SinglesEditor({
   singles,
+  locked = false,
   onUpdate,
   onAdd,
   onRemove,
 }: {
   singles: SoloEntry[]
+  locked?: boolean
   onUpdate: (id: string, name: string) => void
   onAdd: () => void
   onRemove: (id: string) => void
@@ -1341,9 +1331,11 @@ function SinglesEditor({
           <div key={entry.id} className="entry-card compact-entry">
             <div className="entry-header">
               <span>Kendoka {index + 1}</span>
-              <button type="button" onClick={() => onRemove(entry.id)}>
-                Remove
-              </button>
+              {!locked && (
+                <button type="button" onClick={() => onRemove(entry.id)}>
+                  Remove
+                </button>
+              )}
             </div>
             <input
               value={entry.name}
@@ -1354,9 +1346,11 @@ function SinglesEditor({
         ))}
       </div>
 
-      <button type="button" className="primary-button" onClick={onAdd}>
-        Add competitor
-      </button>
+      {!locked && (
+        <button type="button" className="primary-button" onClick={onAdd}>
+          Add competitor
+        </button>
+      )}
     </div>
   )
 }
@@ -2117,6 +2111,7 @@ function TournamentWorkbench({
           {tournament.kind === 'single' ? (
             <SinglesEditor
               singles={tournament.singles}
+              locked={Object.keys(tournament.results).length > 0 || Object.keys(tournament.scores).length > 0}
               onUpdate={(id, name) =>
                 onChange((current) => ({
                   ...current,
