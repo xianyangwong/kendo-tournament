@@ -511,7 +511,7 @@ function MatchCard({
           {tournamentId && !match.isAutoAdvance && match.left.entrant && match.right.entrant ? (
             <a
               className="scoreboard-link"
-              href={`/tournaments/${tournamentId}/match/${match.id}/scoreboard`}
+              href={`${import.meta.env.BASE_URL}tournaments/${tournamentId}/match/${match.id}/scoreboard`}
               target="_blank"
               rel="noreferrer"
               title="Open public scoreboard"
@@ -841,7 +841,7 @@ function TeamMatchCard({
           {tournamentId && match.left.entrant && match.right.entrant ? (
             <a
               className="scoreboard-link"
-              href={`/tournaments/${tournamentId}/match/${match.id}/scoreboard`}
+              href={`${import.meta.env.BASE_URL}tournaments/${tournamentId}/match/${match.id}/scoreboard`}
               target="_blank"
               rel="noreferrer"
               title="Open public scoreboard"
