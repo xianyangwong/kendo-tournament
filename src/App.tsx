@@ -222,12 +222,14 @@ function ScorePlate({
   disabled,
   canScore,
   onScore,
+  isLocked,
 }: {
   score: number
   side: 'left' | 'right'
   disabled?: boolean
   canScore: boolean
   onScore: (amount: 0.5 | 1 | -0.5 | -1) => void
+  isLocked?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement | null>(null)
@@ -261,40 +263,44 @@ function ScorePlate({
       {/* Inline 4-button cluster — only visible inside the fullscreen bracket */}
       <div className={`score-plate-inline score-plate-inline-${side}`}>
         {side === 'left' ? <span className="score-plate-inline-value">{fmtScore(score)}</span> : null}
-        <button
-          type="button"
-          className="score-plate-inline-btn"
-          disabled={!canScore}
-          onClick={() => onScore(1)}
-        >
-          +1
-        </button>
-        <button
-          type="button"
-          className="score-plate-inline-btn"
-          disabled={!canScore}
-          onClick={() => onScore(0.5)}
-        >
-          +½
-        </button>
-        <button
-          type="button"
-          className="score-plate-inline-btn is-undo"
-          disabled={!canUndoHalf}
-          onClick={() => onScore(-0.5)}
-          title="Undo ½"
-        >
-          −½
-        </button>
-        <button
-          type="button"
-          className="score-plate-inline-btn is-undo"
-          disabled={!canUndoFull}
-          onClick={() => onScore(-1)}
-          title="Undo 1"
-        >
-          −1
-        </button>
+        {!isLocked && (
+          <>
+            <button
+              type="button"
+              className="score-plate-inline-btn"
+              disabled={!canScore}
+              onClick={() => onScore(1)}
+            >
+              +1
+            </button>
+            <button
+              type="button"
+              className="score-plate-inline-btn"
+              disabled={!canScore}
+              onClick={() => onScore(0.5)}
+            >
+              +½
+            </button>
+            <button
+              type="button"
+              className="score-plate-inline-btn is-undo"
+              disabled={!canUndoHalf}
+              onClick={() => onScore(-0.5)}
+              title="Undo ½"
+            >
+              −½
+            </button>
+            <button
+              type="button"
+              className="score-plate-inline-btn is-undo"
+              disabled={!canUndoFull}
+              onClick={() => onScore(-1)}
+              title="Undo 1"
+            >
+              −1
+            </button>
+          </>
+        )}
         {side === 'right' ? <span className="score-plate-inline-value">{fmtScore(score)}</span> : null}
       </div>
 
@@ -409,7 +415,7 @@ function MatchTimer({
           {!expired && !isRunning ? (
             <button
               type="button"
-              className="timer-btn timer-btn-icon"
+              className="timer-btn timer-btn-icon timer-btn-start"
               onClick={onStart}
               disabled={disableStart}
               aria-label={timer && timer.remainingMs < durationSeconds * 1000 ? 'Resume' : 'Start'}
@@ -423,7 +429,7 @@ function MatchTimer({
           {isRunning ? (
             <button
               type="button"
-              className="timer-btn timer-btn-icon"
+              className="timer-btn timer-btn-icon timer-btn-pause"
               onClick={onPause}
               aria-label="Pause"
               title="Pause"
@@ -556,6 +562,7 @@ function MatchCard({
                         disabled={!entrant || scoringLocked}
                         canScore={!!entrant && !scoringLocked}
                         onScore={(amount) => entrant && onAddScore?.(match.id, side, amount)}
+                        isLocked={match.isComplete}
                       />
                     </div>
                   </>
@@ -954,6 +961,7 @@ function TeamMatchCard({
                 <span className="bout-vs-kanji" aria-hidden="true">対</span>
 
                 <div className={`bout-right${rightWonBout ? ' bout-won' : ''}`}>
+                  <span className="bout-name">{rightMember?.name.trim() || 'Open slot'}</span>
                   <ScorePlate
                     score={boutScore.right}
                     side="right"
@@ -961,7 +969,6 @@ function TeamMatchCard({
                     canScore={!boutLocked}
                     onScore={(amount) => onAddBoutScore(match.id, boutIndex, 'right', amount)}
                   />
-                  <span className="bout-name">{rightMember?.name.trim() || 'Open slot'}</span>
                 </div>
               </div>
 
