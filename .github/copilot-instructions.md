@@ -1,0 +1,9 @@
+- [x] Verify that the copilot-instructions.md file in the .github directory is created. Recreated after scaffolding.
+- [x] Clarify Project Requirements. Confirmed a Vite React TypeScript app for kendo tournaments with single and team modes, single and double knockout, and a live diagram.
+- [x] Scaffold the Project. Created the Vite React TypeScript app in the current folder and installed dependencies.
+- [x] Customize the Project. Replaced the starter page with tournament setup forms, team roster ordering, and live bracket rendering.
+- [x] Install Required Extensions. No extensions were required by the project setup information.
+- [x] Compile the Project. `npm run build` passes.
+- [x] Create and Run Task. No extra VS Code task was needed because `npm run dev` and `npm run build` already cover the workflow.
+- [x] Launch the Project. The local dev server was started for validation; no separate debug launch was requested.
+- [x] Ensure Documentation is Complete. README now documents the current application and this checklist is cleaned up.

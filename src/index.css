@@ -1,0 +1,80 @@
+:root {
+  --paper: #ece1cf;
+  --paper-soft: #f8efdf;
+  --surface: #f7f0e3;
+  --ink: #1f1611;
+  --ink-deep: #110c09;
+  --ink-soft: #6b5546;
+  --muted-strong: #856854;
+  --sand-light: #f0dec1;
+  --sand-muted: rgba(240, 222, 193, 0.74);
+  --bronze: #bb8a4b;
+  --lacquer: #903d26;
+  --lacquer-deep: #6a2517;
+  --line: rgba(96, 62, 40, 0.14);
+  --line-strong: rgba(230, 207, 173, 0.18);
+  --shadow: 0 26px 80px rgba(41, 25, 18, 0.14);
+  --sans: 'Avenir Next', 'Helvetica Neue', 'Trebuchet MS', sans-serif;
+  --heading: 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Georgia, serif;
+  font: 16px/1.5 var(--sans);
+  color: var(--ink-soft);
+  background: var(--paper);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22), transparent 12%),
+    linear-gradient(180deg, #f5ecd9, #ecdfca 38%, #e7d9c5);
+}
+
+#root {
+  width: min(1440px, calc(100% - 2rem));
+  margin: 0 auto;
+  padding: 1rem 0 2rem;
+}
+
+h1,
+h2,
+h4,
+strong {
+  color: var(--ink);
+}
+
+h1,
+h2,
+h4 {
+  font-family: var(--heading);
+  margin: 0;
+}
+
+h1 {
+  font-size: clamp(2.5rem, 5vw, 4.5rem);
+  line-height: 0.98;
+  letter-spacing: -0.03em;
+}
+
+h2 {
+  font-size: clamp(1.45rem, 2.4vw, 2.2rem);
+}
+
+h4 {
+  font-size: 1.05rem;
+}
+
+p {
+  margin: 0;
+}
+
+::selection {
+  background: rgba(144, 61, 38, 0.18);
+}
