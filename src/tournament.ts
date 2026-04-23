@@ -98,16 +98,6 @@ function pairSequentially(slots: MatchSlot[]): Array<[MatchSlot, MatchSlot]> {
   return pairs
 }
 
-function nextPowerOfTwo(value: number): number {
-  let size = 2
-
-  while (size < value) {
-    size *= 2
-  }
-
-  return size
-}
-
 function getStandardRoundTitle(roundIndex: number, totalRounds: number): string {
   if (totalRounds === 1) {
     return 'Final'
@@ -196,22 +186,49 @@ function buildMatch(
   }
 }
 
-function buildWinnersBracket(
+/**
+ * Compact single-elimination bracket. Each round pairs as many entrants as
+ * possible; if the count is odd, the top remaining seed gets a BYE that round
+ * and advances directly. This keeps the bracket dense — no empty cards, at
+ * most one BYE per round — instead of inflating to the next power of two.
+ *
+ * Total rounds = ceil(log2(n)). For 5 entrants:
+ *   R1: 2 matches + 1 bye  (4 play, 1 advances free)  -> 3 advance
+ *   R2: 1 match  + 1 bye                              -> 2 advance
+ *   R3: 1 match (final)
+ */
+function buildCompactWinnersBracket(
   entrants: TournamentEntrant[],
   results: ResultMap,
 ): { rounds: InternalRound[]; championSlot: MatchSlot } {
-  const bracketSize = nextPowerOfTwo(entrants.length)
-  const initialSlots = Array.from({ length: bracketSize }, (_, index) => {
-    const entrant = entrants[index]
-    return entrant ? createEntrantSlot(entrant) : createByeSlot()
-  })
+  if (entrants.length === 0) {
+    return { rounds: [], championSlot: EMPTY_SLOT }
+  }
 
-  const totalRounds = Math.log2(bracketSize)
+  if (entrants.length === 1) {
+    return { rounds: [], championSlot: createEntrantSlot(entrants[0]) }
+  }
+
+  const totalRounds = Math.ceil(Math.log2(entrants.length))
   const rounds: InternalRound[] = []
-  let currentSlots = initialSlots
+  let currentSlots: MatchSlot[] = entrants.map(createEntrantSlot)
 
   for (let roundIndex = 0; roundIndex < totalRounds; roundIndex += 1) {
-    const matches = pairSequentially(currentSlots).map(([left, right], matchIndex) => {
+    const slotsForRound: MatchSlot[] = []
+    let byeSlot: MatchSlot | null = null
+
+    // If odd number of entrants this round, the top seed (first slot) gets a
+    // bye. Pair the remainder sequentially.
+    if (currentSlots.length % 2 === 1) {
+      byeSlot = currentSlots[0]
+      slotsForRound.push(...currentSlots.slice(1))
+    } else {
+      slotsForRound.push(...currentSlots)
+    }
+
+    const pairs = pairSequentially(slotsForRound)
+
+    const matches = pairs.map(([left, right], matchIndex) => {
       const id = `w-${roundIndex + 1}-${matchIndex + 1}`
       const code = `W${roundIndex + 1}M${matchIndex + 1}`
 
@@ -229,11 +246,13 @@ function buildWinnersBracket(
     rounds.push({
       id: `winners-${roundIndex + 1}`,
       title: getStandardRoundTitle(roundIndex, totalRounds),
-      subtitle: roundIndex === totalRounds - 1 ? 'Winners bracket decider' : 'Advance on one loss',
+      subtitle: roundIndex === totalRounds - 1 ? 'Final bout' : 'Advance on one loss',
       matches,
     })
 
-    currentSlots = matches.map((match) => match.winnerSlot)
+    // Top seed (with bye) advances first, preserving seed order for next round
+    const winners = matches.map((match) => match.winnerSlot)
+    currentSlots = byeSlot ? [byeSlot, ...winners] : winners
   }
 
   return {
@@ -241,6 +260,7 @@ function buildWinnersBracket(
     championSlot: currentSlots[0] ?? EMPTY_SLOT,
   }
 }
+
 
 function buildLosersBracket(
   winnersRounds: InternalRound[],
@@ -252,31 +272,41 @@ function buildLosersBracket(
     return []
   }
 
+  // Helper: filter out BYE loser slots (auto-advances produce BYE losers
+  // that shouldn't enter the losers bracket).
+  const realLosersFromWinnersRound = (roundIndex: number): MatchSlot[] =>
+    winnersRounds[roundIndex].matches
+      .map((match) => match.loserSlot)
+      .filter((slot) => !slot.isBye)
+
   const rounds: InternalRound[] = []
-  let previousRound: BracketMatch[] = []
+  // Pool of slots currently in the losers bracket (waiting to be paired).
+  let pool: MatchSlot[] = []
+  let losersRoundNumber = 0
 
-  for (let roundNumber = 1; roundNumber <= 2 * (totalWinnerRounds - 1); roundNumber += 1) {
-    const isOddRound = roundNumber % 2 === 1
-    let pairs: Array<[MatchSlot, MatchSlot]> = []
-
-    if (roundNumber === 1) {
-      pairs = pairSequentially(winnersRounds[0].matches.map((match) => match.loserSlot))
-    } else if (isOddRound) {
-      pairs = pairSequentially(previousRound.map((match) => match.winnerSlot))
-    } else {
-      const previousWinners = previousRound.map((match) => match.winnerSlot)
-      const winnerRoundIndex = roundNumber / 2
-      const incomingLosers = winnersRounds[winnerRoundIndex].matches.map(
-        (match) => match.loserSlot,
-      )
-
-      pairs = previousWinners.map((slot, index) => [slot, incomingLosers[index] ?? EMPTY_SLOT])
+  // Helper: build a round from a pool of slots. If odd, the top slot gets a
+  // bye and carries forward. Returns the new pool (winners of this round
+  // plus any bye carry).
+  const playRound = (
+    inputPool: MatchSlot[],
+    subtitle: string,
+  ): MatchSlot[] => {
+    if (inputPool.length < 2) {
+      return inputPool
     }
 
-    const matches = pairs.map(([left, right], matchIndex) => {
-      const id = `l-${roundNumber}-${matchIndex + 1}`
-      const code = `L${roundNumber}M${matchIndex + 1}`
+    let byeCarry: MatchSlot | null = null
+    let toPair = inputPool
+    if (toPair.length % 2 === 1) {
+      byeCarry = toPair[0]
+      toPair = toPair.slice(1)
+    }
 
+    losersRoundNumber += 1
+    const pairs = pairSequentially(toPair)
+    const matches = pairs.map(([left, right], matchIndex) => {
+      const id = `l-${losersRoundNumber}-${matchIndex + 1}`
+      const code = `L${losersRoundNumber}M${matchIndex + 1}`
       return buildMatch(
         id,
         code,
@@ -289,13 +319,38 @@ function buildLosersBracket(
     })
 
     rounds.push({
-      id: `losers-${roundNumber}`,
-      title: `Elimination Round ${roundNumber}`,
-      subtitle: isOddRound ? 'Losers stay alive' : 'Drops from winners bracket join',
+      id: `losers-${losersRoundNumber}`,
+      title: `Elimination Round ${losersRoundNumber}`,
+      subtitle,
       matches,
     })
 
-    previousRound = matches
+    const winners = matches.map((match) => match.winnerSlot)
+    return byeCarry ? [byeCarry, ...winners] : winners
+  }
+
+  // Seed losers pool with R1 losers
+  pool = realLosersFromWinnersRound(0)
+
+  // For each subsequent winners round, run a pairing-down round on the pool,
+  // then merge in the new W-round losers and run another round.
+  for (let wRound = 1; wRound < totalWinnerRounds; wRound += 1) {
+    // First reduce the existing pool (if we have more than the incoming losers)
+    if (pool.length > 1) {
+      pool = playRound(pool, 'Losers stay alive')
+    }
+    // Merge in incoming losers from this winners round
+    const incoming = realLosersFromWinnersRound(wRound)
+    pool = [...pool, ...incoming]
+    // Then play a round combining survivors with new drops
+    if (pool.length > 1) {
+      pool = playRound(pool, 'Drops from winners bracket join')
+    }
+  }
+
+  // Drain remaining pool down to a single losers champion
+  while (pool.length > 1) {
+    pool = playRound(pool, 'Losers stay alive')
   }
 
   return rounds
@@ -307,7 +362,7 @@ export function buildTournamentBracket(
   results: ResultMap,
 ): BracketView {
   const { rounds: winnersRounds, championSlot: winnersChampionSlot } =
-    buildWinnersBracket(entrants, results)
+    buildCompactWinnersBracket(entrants, results)
   const losersRounds =
     format === 'double' ? buildLosersBracket(winnersRounds, results) : []
 

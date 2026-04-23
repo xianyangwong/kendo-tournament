@@ -1096,10 +1096,8 @@ button.is-active {
 
 .rounds-grid {
   display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(14rem, 1fr);
-  gap: 0.85rem;
-  overflow-x: auto;
+  grid-auto-flow: row;
+  gap: 1.4rem;
   padding-bottom: 0.35rem;
 }
 
@@ -1115,21 +1113,28 @@ button.is-active {
 .round-column {
   display: grid;
   gap: 0.75rem;
-  align-content: center;
-  min-height: 10rem;
+  align-content: start;
 }
 
 .round-matches {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.75rem;
-  align-content: center;
+  align-content: start;
+  min-width: 0;
+}
+
+@media (max-width: 720px) {
+  .round-matches {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .round-header {
   display: grid;
   gap: 0.24rem;
-  min-height: 3.35rem;
-  padding: 0.35rem 0 0.5rem;
+  min-height: auto;
+  padding: 0.45rem 0 0.55rem;
   border-top: 2px solid var(--indigo-pale);
   border-bottom: 1px solid var(--rule-soft);
 }
@@ -1148,6 +1153,9 @@ button.is-active {
   border-radius: 0.25rem;
   background: var(--washi-soft);
   transition: border-color 160ms ease, box-shadow 160ms ease;
+  min-width: 0;
+  container-type: inline-size;
+  container-name: match-card;
 }
 
 .match-card:hover {
@@ -1258,6 +1266,7 @@ button.is-active {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  min-width: 0;
 }
 
 .match-vs-kanji {
@@ -1272,9 +1281,10 @@ button.is-active {
 .score-slot {
   flex: 1;
   display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  padding: 0.55rem 0.6rem;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.4rem;
+  padding: 0.65rem 0.7rem;
   border: 1px solid var(--rule-soft);
   border-radius: 0.3rem;
   background: var(--washi-deep);
@@ -1282,9 +1292,9 @@ button.is-active {
   transition: border-color 140ms ease, background 140ms ease;
 }
 
-/* Right slot: reverse so buttons are left of score and name is on far right */
+/* Right slot mirrors text alignment so both sides feel symmetrical */
 .score-slot.score-slot-right {
-  flex-direction: row-reverse;
+  flex-direction: column;
 }
 
 .score-slot.is-winner {
@@ -1297,17 +1307,52 @@ button.is-active {
 }
 
 .score-slot-name {
-  flex: 1;
+  flex: none;
   font-weight: 600;
-  font-size: 0.92rem;
+  font-size: 0.95rem;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-align: center;
 }
 
 .score-slot-right .score-slot-name {
-  text-align: right;
+  text-align: center;
+}
+
+/* ── Narrow column: stack players vertically ───────────── */
+@container match-card (max-width: 24rem) {
+  .match-scoring-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.35rem;
+  }
+  .match-vs-kanji {
+    align-self: center;
+  }
+  .score-slot,
+  .score-slot.score-slot-right {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.4rem;
+  }
+  .score-slot-name,
+  .score-slot-right .score-slot-name {
+    text-align: left;
+    white-space: normal;
+  }
+  .score-plate-inline {
+    gap: 0.25rem;
+  }
+  .score-plate-inline-btn {
+    min-width: 0;
+    padding: 0.4rem 0.3rem;
+  }
+  .score-plate-inline-value {
+    font-size: 2.6rem;
+    min-width: 1.2ch;
+  }
 }
 
 .score-controls {
@@ -2761,35 +2806,39 @@ body.scoreboard-body #root {
 /* score plate: inline 4-button mode — now default for both normal and fullscreen */
 .score-plate-popover { display: none; }
 .score-plate-inline {
-  display: inline-flex;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.35rem;
   align-items: center;
-  gap: 0.3rem;
+  width: 100%;
+}
+.score-plate-inline > .score-plate-inline-value {
+  grid-column: 1 / -1;
+  grid-row: 1;
+}
+.score-plate-inline > .score-plate-inline-btn {
+  grid-row: 2;
 }
 
 .bracket-panel.is-fullscreen .score-plate-popover { display: none; }
 .bracket-panel.is-fullscreen .score-plate-inline {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-.bracket-panel.is-fullscreen .score-plate-inline-right {
-  flex-direction: row;
+  gap: 0.45rem;
 }
 .score-plate-inline-value {
   font-family: 'Cormorant Garamond', 'Shippori Mincho', serif;
   font-style: italic;
-  font-size: 2.2rem;
+  font-size: 3.4rem;
   font-weight: 700;
-  color: var(--sumi);
+  color: var(--shu);
   font-variant-numeric: tabular-nums;
   min-width: 1.4ch;
   text-align: center;
-  padding: 0 0.25rem;
+  padding: 0 0.35rem;
   line-height: 1;
 }
 .bracket-panel.is-fullscreen .score-plate-inline-value {
-  font-size: clamp(1.6rem, 2.4vw, 2.4rem);
-  padding: 0 0.3rem;
+  font-size: clamp(2.8rem, 4vw, 4rem);
+  padding: 0 0.4rem;
 }
 .score-plate-inline-btn {
   font-family: 'Manrope', sans-serif;
@@ -2903,8 +2952,14 @@ body.scoreboard-body #root {
   gap: 0.7rem;
 }
 
-/* fullscreen: team bracket rounds */
-.bracket-panel.is-fullscreen .rounds-grid {
-  /* Keep the same horizontal columns layout as normal, just slightly wider cards */
-  grid-auto-columns: minmax(20rem, 1fr);
+/* fullscreen: vertical rounds, wider match cards */
+.bracket-panel.is-fullscreen .round-matches {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+@media (max-width: 720px) {
+  .bracket-panel.is-fullscreen .round-matches {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
