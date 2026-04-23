@@ -1165,10 +1165,12 @@ function TournamentCard({
   const statusClass = status === 'past' ? 'is-complete' : status === 'active' ? 'is-live' : 'is-upcoming'
 
   return (
-    <article className="tournament-card">
+    <article className={`tournament-card tournament-card--${tournament.kind}`}>
       <div className="tournament-card-header">
         <div>
-          <p>{tournament.kind === 'single' ? 'Individual event' : 'Team event'}</p>
+          <span className="tournament-type-badge">
+            {tournament.kind === 'single' ? 'Individual' : 'Team'}
+          </span>
           <h3>{tournament.name}</h3>
         </div>
         <span className={`status-chip ${statusClass}`}>
@@ -1265,14 +1267,9 @@ function HomePage({
         </Link>
       }
     >
-      <section className="home-hero">
-        <div>
-          <p className="eyebrow">Local archive</p>
-          <h1>Track every kendo tournament from one desk.</h1>
-        </div>
-        <p className="home-hero-copy">
-          Current and finished tournaments are saved in local storage, so you can return to the same event board without setting up brackets from scratch.
-        </p>
+      <section className="home-header">
+        <h1>Tournaments</h1>
+        <span className="home-header-count">{tournaments.length} saved</span>
       </section>
 
       <section className="list-section">
@@ -1477,21 +1474,25 @@ function TournamentWizard({
       }
     >
       <section className="wizard-layout">
-        <aside className="wizard-sidebar panel-card">
-          <p className="eyebrow">Create tournament</p>
-          <h1>Guided setup</h1>
-          <ol className="wizard-steps">
-            <li className={step === 0 ? 'is-active' : step > 0 ? 'is-complete' : ''}>Basics</li>
-            <li className={step === 1 ? 'is-active' : step > 1 ? 'is-complete' : ''}>Entrants</li>
-            <li className={step === 2 ? 'is-active' : ''}>Review</li>
-          </ol>
-        </aside>
-
         <div className="wizard-main">
+          <div className="wizard-header">
+            <p className="eyebrow">New tournament</p>
+            <h1 className="wizard-title">Guided setup</h1>
+            <nav className="wizard-dots" aria-label="Setup progress">
+              {(['Basics', 'Entrants', 'Review'] as const).map((label, i) => (
+                <Fragment key={i}>
+                  <div className={`wizard-dot-step${i === step ? ' is-active' : i < step ? ' is-done' : ''}`}>
+                    <span className="wizard-dot-circle">{i < step ? '✓' : null}</span>
+                    <span className="wizard-dot-label">{label}</span>
+                  </div>
+                  {i < 2 ? <div className="wizard-dot-connector" aria-hidden="true" /> : null}
+                </Fragment>
+              ))}
+            </nav>
+          </div>
           {step === 0 ? (
             <div className="panel-card wizard-panel">
               <div className="panel-heading">
-                <p>Step 1</p>
                 <h2>Tournament basics</h2>
               </div>
 
@@ -1621,7 +1622,6 @@ function TournamentWizard({
           {step === 2 ? (
             <div className="panel-card wizard-panel">
               <div className="panel-heading">
-                <p>Step 3</p>
                 <h2>Review tournament</h2>
               </div>
 
@@ -1974,6 +1974,17 @@ function TournamentWorkbench({
   })()
 
   const [bracketFullscreen, setBracketFullscreen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+
+  useEffect(() => {
+    if (!settingsOpen) return
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setSettingsOpen(false)
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [settingsOpen])
+
   useEffect(() => {
     if (!bracketFullscreen) return
     const prev = document.body.style.overflow
@@ -1990,268 +2001,225 @@ function TournamentWorkbench({
 
   return (
     <>
-      <section className="hero-panel">
-        <div className="hero-copy">
-          <p className="eyebrow">Tournament desk</p>
-          <div className="hero-meta-row">
-            <span className="meta-pill">
-              {tournament.kind === 'single' ? 'Individual draw' : 'Team roster draw'}
-            </span>
-            <span className="meta-pill">
-              {tournament.format === 'single' ? 'Single elimination' : 'Double elimination'}
-            </span>
+      <header className="workbench-header">
+        <h1>{tournament.name}</h1>
+        <div className="workbench-header-right">
+          <div className="workbench-status">
+            <span className="status-label">{bracket?.champion ? 'Champion' : 'Next bout'}</span>
+            <strong className="status-value">
+              {bracket?.champion?.label ?? nextPendingMatch?.code ?? '—'}
+            </strong>
           </div>
-          <h1>{tournament.name}</h1>
-          <p className="hero-text">
-            Use the setup panel to refine the event, then click bracket winners to keep the live board synchronized with the tournament floor.
-          </p>
-          <div className="hero-note">
-            <span className="hero-note-label">Floor call</span>
-            <strong>{nextPendingMatch?.code ?? 'Ready to set the first bout'}</strong>
-            <p>
-              {nextPendingMatch
-                ? 'Select the winner inside the bracket board to keep the event moving.'
-                : 'Once two entrants exist, the board turns into a live tournament sheet.'}
-            </p>
-          </div>
+          <button
+            type="button"
+            className="settings-icon-btn"
+            onClick={() => setSettingsOpen(true)}
+            title="Tournament settings"
+            aria-label="Open tournament settings"
+          >
+            ⚙
+          </button>
         </div>
-        <div className="hero-metrics">
-          <div className="metric-card accent-card">
-            <span>Progress</span>
-            <strong>{progress}%</strong>
-            <p>
-              {bracket
-                ? `${bracket.completedMatches} of ${bracket.totalMatches} matches settled`
-                : 'Waiting for entrants'}
-            </p>
-          </div>
-          <div className="metric-card">
-            <span>Champion</span>
-            <strong>{bracket?.champion?.label ?? 'TBD'}</strong>
-            <p>
-              {bracket?.champion
-                ? 'Bracket complete'
-                : nextPendingMatch
-                  ? `Next call: ${nextPendingMatch.code}`
-                  : 'Bracket will appear after at least two entrants'}
-            </p>
-          </div>
-        </div>
-      </section>
+      </header>
 
-      <section className="workspace-grid">
-        <aside className="control-panel">
-          <div className="panel-card form-panel">
-            <div className="panel-heading">
-              <p>Setup</p>
+      {/* Settings drawer */}
+      {settingsOpen ? (
+        <div className="settings-overlay" onClick={() => setSettingsOpen(false)}>
+          <aside className="settings-drawer" onClick={(e) => e.stopPropagation()}>
+            <div className="settings-drawer-header">
               <h2>Tournament settings</h2>
-            </div>
-
-            <label className="field-block">
-              <span>Tournament name</span>
-              <input
-                value={tournament.name}
-                onChange={(event) =>
-                  onChange((current) => ({ ...current, name: event.target.value }))
-                }
-                placeholder="Autumn Kendo Cup"
-              />
-            </label>
-
-            <div className="toggle-group">
-              <span>Event type</span>
-              <div className="pill-row">
-                <button
-                  type="button"
-                  className={tournament.kind === 'single' ? 'is-active' : ''}
-                  disabled
-                >
-                  Single
-                </button>
-                <button
-                  type="button"
-                  className={tournament.kind === 'team' ? 'is-active' : ''}
-                  disabled
-                >
-                  Team
-                </button>
-              </div>
-            </div>
-
-            <div className="toggle-group">
-              <span>Knockout format</span>
-              <div className="pill-row">
-                <button
-                  type="button"
-                  className={tournament.format === 'single' ? 'is-active' : ''}
-                  onClick={() => onChange((current) => ({ ...current, format: 'single' }))}
-                >
-                  Single knockout
-                </button>
-                <button
-                  type="button"
-                  className={tournament.format === 'double' ? 'is-active' : ''}
-                  onClick={() => onChange((current) => ({ ...current, format: 'double' }))}
-                >
-                  Double knockout
-                </button>
-              </div>
-            </div>
-
-            <DurationField
-              seconds={tournament.matchDurationSeconds ?? DEFAULT_MATCH_DURATION_SECONDS}
-              onChange={handleSetMatchDuration}
-              disabled={Object.keys(tournament.results).length > 0 || Object.keys(tournament.scores).length > 0}
-            />
-
-            <div className="utility-row">
               <button
                 type="button"
-                className="ghost-button"
-                onClick={() => onChange((current) => ({ ...current, results: {}, scores: {}, timers: {} }))}
-              >
-                Clear bracket results
-              </button>
+                className="settings-close-btn"
+                onClick={() => setSettingsOpen(false)}
+                aria-label="Close settings"
+              >✕</button>
             </div>
-          </div>
 
-          {tournament.kind === 'single' ? (
-            <SinglesEditor
-              singles={tournament.singles}
-              locked={Object.keys(tournament.results).length > 0 || Object.keys(tournament.scores).length > 0}
-              onUpdate={(id, name) =>
-                onChange((current) => ({
-                  ...current,
-                  singles: current.singles.map((entry) =>
-                    entry.id === id ? { ...entry, name } : entry,
-                  ),
-                }))
-              }
-              onAdd={() =>
-                onChange((current) => ({
-                  ...current,
-                  singles: [...current.singles, createSoloEntry()],
-                }))
-              }
-              onRemove={(id) =>
-                onChange((current) => ({
-                  ...current,
-                  singles: current.singles.filter((entry) => entry.id !== id),
-                }))
-              }
-            />
-          ) : (
-            <TeamsEditor
-              teams={tournament.teams}
-              locked={Object.keys(tournament.results).length > 0 || Object.keys(tournament.scores).length > 0}
-              onUpdateTeam={(teamId, name) =>
-                onChange((current) => ({
-                  ...current,
-                  teams: current.teams.map((team) =>
-                    team.id === teamId ? { ...team, name } : team,
-                  ),
-                }))
-              }
-              onRemoveTeam={(teamId) =>
-                onChange((current) => ({
-                  ...current,
-                  teams: current.teams.filter((team) => team.id !== teamId),
-                }))
-              }
-              onAddTeam={() =>
-                onChange((current) => ({
-                  ...current,
-                  teams: [...current.teams, createTeamEntry()],
-                }))
-              }
-              onUpdateMember={(teamId, memberId, name) =>
-                onChange((current) => ({
-                  ...current,
-                  teams: current.teams.map((team) =>
-                    team.id === teamId
-                      ? {
-                          ...team,
-                          members: team.members.map((member) =>
-                            member.id === memberId ? { ...member, name } : member,
-                          ),
-                        }
-                      : team,
-                  ),
-                }))
-              }
-              onRemoveMember={(teamId, memberId) =>
-                onChange((current) => ({
-                  ...current,
-                  teams: current.teams.map((team) =>
-                    team.id === teamId
-                      ? {
-                          ...team,
-                          members: team.members.filter((member) => member.id !== memberId),
-                        }
-                      : team,
-                  ),
-                }))
-              }
-              onAddMember={(teamId) =>
-                onChange((current) => ({
-                  ...current,
-                  teams: current.teams.map((team) =>
-                    team.id === teamId
-                      ? { ...team, members: [...team.members, createTeamMember()] }
-                      : team,
-                  ),
-                }))
-              }
-            />
-          )}
-        </aside>
+            <div className="settings-drawer-body">
+              <label className="field-block">
+                <span>Tournament name</span>
+                <input
+                  value={tournament.name}
+                  onChange={(event) =>
+                    onChange((current) => ({ ...current, name: event.target.value }))
+                  }
+                  placeholder="Autumn Kendo Cup"
+                />
+              </label>
 
+              <div className="toggle-group">
+                <span>Event type</span>
+                <div className="pill-row">
+                  <button
+                    type="button"
+                    className={tournament.kind === 'single' ? 'is-active' : ''}
+                    disabled
+                  >
+                    Single
+                  </button>
+                  <button
+                    type="button"
+                    className={tournament.kind === 'team' ? 'is-active' : ''}
+                    disabled
+                  >
+                    Team
+                  </button>
+                </div>
+              </div>
+
+              <div className="toggle-group">
+                <span>Knockout format</span>
+                <div className="pill-row">
+                  <button
+                    type="button"
+                    className={tournament.format === 'single' ? 'is-active' : ''}
+                    onClick={() => onChange((current) => ({ ...current, format: 'single' }))}
+                  >
+                    Single knockout
+                  </button>
+                  <button
+                    type="button"
+                    className={tournament.format === 'double' ? 'is-active' : ''}
+                    onClick={() => onChange((current) => ({ ...current, format: 'double' }))}
+                  >
+                    Double knockout
+                  </button>
+                </div>
+              </div>
+
+              <DurationField
+                seconds={tournament.matchDurationSeconds ?? DEFAULT_MATCH_DURATION_SECONDS}
+                onChange={handleSetMatchDuration}
+                disabled={Object.keys(tournament.results).length > 0 || Object.keys(tournament.scores).length > 0}
+              />
+
+              <div className="utility-row">
+                <button
+                  type="button"
+                  className="ghost-button"
+                  onClick={() => onChange((current) => ({ ...current, results: {}, scores: {}, timers: {} }))}
+                >
+                  Clear bracket results
+                </button>
+              </div>
+
+              {tournament.kind === 'single' ? (
+                <SinglesEditor
+                  singles={tournament.singles}
+                  locked={Object.keys(tournament.results).length > 0 || Object.keys(tournament.scores).length > 0}
+                  onUpdate={(id, name) =>
+                    onChange((current) => ({
+                      ...current,
+                      singles: current.singles.map((entry) =>
+                        entry.id === id ? { ...entry, name } : entry,
+                      ),
+                    }))
+                  }
+                  onAdd={() =>
+                    onChange((current) => ({
+                      ...current,
+                      singles: [...current.singles, createSoloEntry()],
+                    }))
+                  }
+                  onRemove={(id) =>
+                    onChange((current) => ({
+                      ...current,
+                      singles: current.singles.filter((entry) => entry.id !== id),
+                    }))
+                  }
+                />
+              ) : (
+                <TeamsEditor
+                  teams={tournament.teams}
+                  locked={Object.keys(tournament.results).length > 0 || Object.keys(tournament.scores).length > 0}
+                  onUpdateTeam={(teamId, name) =>
+                    onChange((current) => ({
+                      ...current,
+                      teams: current.teams.map((team) =>
+                        team.id === teamId ? { ...team, name } : team,
+                      ),
+                    }))
+                  }
+                  onRemoveTeam={(teamId) =>
+                    onChange((current) => ({
+                      ...current,
+                      teams: current.teams.filter((team) => team.id !== teamId),
+                    }))
+                  }
+                  onAddTeam={() =>
+                    onChange((current) => ({
+                      ...current,
+                      teams: [...current.teams, createTeamEntry()],
+                    }))
+                  }
+                  onUpdateMember={(teamId, memberId, name) =>
+                    onChange((current) => ({
+                      ...current,
+                      teams: current.teams.map((team) =>
+                        team.id === teamId
+                          ? {
+                              ...team,
+                              members: team.members.map((member) =>
+                                member.id === memberId ? { ...member, name } : member,
+                              ),
+                            }
+                          : team,
+                      ),
+                    }))
+                  }
+                  onRemoveMember={(teamId, memberId) =>
+                    onChange((current) => ({
+                      ...current,
+                      teams: current.teams.map((team) =>
+                        team.id === teamId
+                          ? {
+                              ...team,
+                              members: team.members.filter((member) => member.id !== memberId),
+                            }
+                          : team,
+                      ),
+                    }))
+                  }
+                  onAddMember={(teamId) =>
+                    onChange((current) => ({
+                      ...current,
+                      teams: current.teams.map((team) =>
+                        team.id === teamId
+                          ? { ...team, members: [...team.members, createTeamMember()] }
+                          : team,
+                      ),
+                    }))
+                  }
+                />
+              )}
+            </div>
+          </aside>
+        </div>
+      ) : null}
+
+      <section className="workspace-grid">
         <section className="diagram-panel">
-          <div className="panel-card summary-panel">
-            <div className="panel-heading">
-              <p>Status</p>
-              <h2>{tournament.name}</h2>
-            </div>
-
-            <p className="summary-intro">
-              A live event board for tracking the current draw, next bout, and eventual champion.
+          {entrants.length < 2 ? (
+            <p className="validation-note">
+              Add at least two entrants in settings to generate the bracket.
             </p>
-
-            <div className="summary-grid">
-              <div className="summary-tile summary-tile-wide">
-                <span>Bracket type</span>
-                <strong>
-                  {tournament.kind === 'single' ? 'Single event' : 'Team event'} /{' '}
-                  {tournament.format === 'single' ? 'Single knockout' : 'Double knockout'}
-                </strong>
-              </div>
-              <div className="summary-tile">
-                <span>Entrants</span>
-                <strong>{entrants.length}</strong>
-              </div>
-              <div className="summary-tile">
-                <span>Next up</span>
-                <strong>{nextPendingMatch?.code ?? 'Bracket complete'}</strong>
-              </div>
-              <div className="summary-tile summary-tile-wide">
-                <span>Champion</span>
-                <strong>{bracket?.champion?.label ?? 'No winner yet'}</strong>
-              </div>
-            </div>
-
-            {entrants.length < 2 ? (
-              <p className="validation-note">
-                Add at least two entrants to generate the tournament graph.
-              </p>
-            ) : null}
-          </div>
+          ) : null}
 
           {bracket ? (
             <div className={`panel-card bracket-panel${bracketFullscreen ? ' is-fullscreen' : ''}`}>
               <div className="panel-heading bracket-heading">
-                <div>
-                  <p>Diagram</p>
-                  <h2>Live tournament bracket</h2>
+                <div className="bracket-heading-meta">
+                  <h2>Live bracket</h2>
+                  <span className="bracket-meta-pills">
+                    <span className="meta-pill">{entrants.length} entrants</span>
+                    {nextPendingMatch && !bracket.champion
+                      ? <span className="meta-pill">Next: {nextPendingMatch.code}</span>
+                      : null}
+                    {bracket.champion
+                      ? <span className="meta-pill meta-pill-champion">Champion: {bracket.champion.label}</span>
+                      : null}
+                  </span>
                 </div>
                 <button
                   type="button"
