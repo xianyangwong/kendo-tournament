@@ -16,12 +16,18 @@ export interface TeamEntry {
   members: TeamMember[]
 }
 
+export interface MatchTimerState {
+  remainingMs: number
+  runningSince: number | null
+}
+
 export interface TournamentDraft {
   name: string
   kind: TournamentKind
   format: EliminationFormat
   singles: SoloEntry[]
   teams: TeamEntry[]
+  matchDurationSeconds: number
 }
 
 export interface MatchScore {
@@ -36,7 +42,10 @@ export interface TournamentRecord extends TournamentDraft {
   results: Record<string, string>
   scores: Record<string, MatchScore>
   lineups: Record<string, { left: string[]; right: string[] }>
+  timers: Record<string, MatchTimerState>
 }
+
+export const DEFAULT_MATCH_DURATION_SECONDS = 120
 
 export const TOURNAMENT_STORAGE_KEY = 'kendo-tournament:v1'
 
@@ -73,6 +82,7 @@ export function createEmptyTournamentDraft(): TournamentDraft {
     format: 'single',
     singles: [createSoloEntry(), createSoloEntry()],
     teams: [createTeamEntry(), createTeamEntry()],
+    matchDurationSeconds: DEFAULT_MATCH_DURATION_SECONDS,
   }
 }
 
@@ -98,7 +108,7 @@ export function cloneTeams(entries: TeamEntry[]): TeamEntry[] {
 
 export function createTournamentRecord(
   draft: TournamentDraft,
-  options?: Partial<Pick<TournamentRecord, 'id' | 'createdAt' | 'updatedAt' | 'results' | 'scores' | 'lineups'>>,
+  options?: Partial<Pick<TournamentRecord, 'id' | 'createdAt' | 'updatedAt' | 'results' | 'scores' | 'lineups' | 'timers'>>,
 ): TournamentRecord {
   const timestamp = new Date().toISOString()
 
@@ -112,8 +122,10 @@ export function createTournamentRecord(
     format: draft.format,
     singles: shuffled(cloneSingles(draft.singles)),
     teams: shuffled(cloneTeams(draft.teams)),
+    matchDurationSeconds: draft.matchDurationSeconds ?? DEFAULT_MATCH_DURATION_SECONDS,
     scores: options?.scores ?? {},
     lineups: options?.lineups ?? {},
+    timers: options?.timers ?? {},
   }
 }
 

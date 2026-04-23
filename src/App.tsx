@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import {
   BrowserRouter,
   Link,
@@ -16,6 +16,7 @@ import {
 } from './tournament'
 import {
   TOURNAMENT_STORAGE_KEY,
+  DEFAULT_MATCH_DURATION_SECONDS,
   cloneSingles,
   cloneTeams,
   createEmptyTournamentDraft,
@@ -29,6 +30,7 @@ import {
   type TournamentDraft,
   type TournamentRecord,
   type MatchScore,
+  type MatchTimerState,
   toTournamentEntrants,
 } from './app-model'
 
@@ -48,9 +50,9 @@ function getNextPendingMatch(rounds: BracketRound[]): BracketMatch | null {
 
 // Traditional kendo team position names, keyed by team size then index.
 const KENDO_POSITIONS: Record<number, string[]> = {
-  3: ['Senpo', 'Chuken', 'Taisho'],
-  5: ['Senpo', 'Jiho', 'Chuken', 'Fukusho', 'Taisho'],
-  7: ['Senpo', 'Jiho', 'Chuken', 'Fukusho', 'Gojo', 'Rokuban', 'Taisho'],
+  3: ['先鋒', '中堅', '大将'],
+  5: ['先鋒', '次鋒', '中堅', '副将', '大将'],
+  7: ['先鋒', '次鋒', '中堅', '副将', '五将', '六将', '大将'],
 }
 
 function getKendoPosition(index: number, total: number): string {
@@ -59,6 +61,39 @@ function getKendoPosition(index: number, total: number): string {
 
 function getBoutKey(matchId: string, boutIndex: number): string {
   return `${matchId}:bout:${boutIndex}`
+}
+
+function getTimerRemainingMs(timer: MatchTimerState | undefined, durationSeconds: number): number {
+  if (!timer) return durationSeconds * 1000
+  if (timer.runningSince == null) return Math.max(0, timer.remainingMs)
+  return Math.max(0, timer.remainingMs - (Date.now() - timer.runningSince))
+}
+
+function isTimerExpired(timer: MatchTimerState | undefined, durationSeconds: number): boolean {
+  if (!timer) return false
+  return getTimerRemainingMs(timer, durationSeconds) <= 0
+}
+
+function formatTimerMs(ms: number): string {
+  const total = Math.max(0, Math.ceil(ms / 1000))
+  const m = Math.floor(total / 60)
+  const s = total % 60
+  return `${m}:${s.toString().padStart(2, '0')}`
+}
+
+function parseDurationInput(value: string): number | null {
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  if (trimmed.includes(':')) {
+    const [mStr, sStr] = trimmed.split(':')
+    const m = Number(mStr)
+    const s = Number(sStr ?? '0')
+    if (!Number.isFinite(m) || !Number.isFinite(s) || m < 0 || s < 0 || s >= 60) return null
+    return Math.round(m * 60 + s)
+  }
+  const n = Number(trimmed)
+  if (!Number.isFinite(n) || n < 0) return null
+  return Math.round(n)
 }
 
 // Resolves the ordered member list for one team in a specific match.
@@ -112,23 +147,355 @@ function computeTeamStats(boutScores: Array<MatchScore | undefined>, boutsTotal:
   return { leftWins, rightWins, leftTotal, rightTotal, finishedBouts, pendingBouts, teamWinner }
 }
 
+function ScoreboardClock({
+  timer,
+  durationSeconds,
+}: {
+  timer: MatchTimerState | undefined
+  durationSeconds: number
+}) {
+  const [, setTick] = useState(0)
+  const isRunning = timer?.runningSince != null
+  useEffect(() => {
+    if (!isRunning) return
+    const id = window.setInterval(() => setTick((n) => n + 1), 250)
+    return () => window.clearInterval(id)
+  }, [isRunning])
+  const remaining = getTimerRemainingMs(timer, durationSeconds)
+  const expired = remaining <= 0 && timer != null
+  return (
+    <span className={`scoreboard-clock${isRunning ? ' is-running' : ''}${expired ? ' is-expired' : ''}`}>
+      {formatTimerMs(remaining)}
+    </span>
+  )
+}
+
+function DurationField({
+  seconds,
+  onChange,
+  label = 'Match time',
+  disabled = false,
+}: {
+  seconds: number
+  onChange: (seconds: number) => void
+  label?: string
+  disabled?: boolean
+}) {
+  const [text, setText] = useState(formatTimerMs(seconds * 1000))
+  useEffect(() => {
+    setText(formatTimerMs(seconds * 1000))
+  }, [seconds])
+  return (
+    <label className={`field-block duration-field${disabled ? ' is-disabled' : ''}`}>
+      <span>{label}</span>
+      <input
+        type="text"
+        inputMode="numeric"
+        value={text}
+        disabled={disabled}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={() => {
+          const next = parseDurationInput(text)
+          if (next == null || next < 1) {
+            setText(formatTimerMs(seconds * 1000))
+          } else {
+            onChange(next)
+            setText(formatTimerMs(next * 1000))
+          }
+        }}
+        placeholder="2:00"
+      />
+      <small className="field-hint">
+        {disabled ? 'Locked once the tournament has started.' : 'Format m:ss (e.g. 2:00). Default 2:00.'}
+      </small>
+    </label>
+  )
+}
+
+function fmtScore(n: number) {
+  return n % 1 === 0 ? String(n) : n.toFixed(1)
+}
+
+function ScorePlate({
+  score,
+  side,
+  disabled,
+  canScore,
+  onScore,
+}: {
+  score: number
+  side: 'left' | 'right'
+  disabled?: boolean
+  canScore: boolean
+  onScore: (amount: 0.5 | 1 | -0.5 | -1) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    if (!open) return
+    function onDoc(e: MouseEvent) {
+      if (!ref.current) return
+      if (!ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('mousedown', onDoc)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDoc)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
+  const canUndoHalf = score > 0
+  const canUndoFull = score >= 1
+
+  function act(amount: 0.5 | 1 | -0.5 | -1) {
+    onScore(amount)
+    setOpen(false)
+  }
+
+  return (
+    <div className={`score-plate score-plate-${side}`} ref={ref}>
+      {/* Inline 4-button cluster — only visible inside the fullscreen bracket */}
+      <div className={`score-plate-inline score-plate-inline-${side}`}>
+        {side === 'left' ? <span className="score-plate-inline-value">{fmtScore(score)}</span> : null}
+        <button
+          type="button"
+          className="score-plate-inline-btn"
+          disabled={!canScore}
+          onClick={() => onScore(1)}
+        >
+          +1
+        </button>
+        <button
+          type="button"
+          className="score-plate-inline-btn"
+          disabled={!canScore}
+          onClick={() => onScore(0.5)}
+        >
+          +½
+        </button>
+        <button
+          type="button"
+          className="score-plate-inline-btn is-undo"
+          disabled={!canUndoHalf}
+          onClick={() => onScore(-0.5)}
+          title="Undo ½"
+        >
+          −½
+        </button>
+        <button
+          type="button"
+          className="score-plate-inline-btn is-undo"
+          disabled={!canUndoFull}
+          onClick={() => onScore(-1)}
+          title="Undo 1"
+        >
+          −1
+        </button>
+        {side === 'right' ? <span className="score-plate-inline-value">{fmtScore(score)}</span> : null}
+      </div>
+
+      {/* Default popover trigger — hidden in fullscreen */}
+      <div className="score-plate-popover">
+        <button
+          type="button"
+          className={`score-plate-trigger${open ? ' is-open' : ''}`}
+          disabled={disabled && !canUndoHalf}
+          onClick={() => setOpen((v) => !v)}
+          aria-haspopup="menu"
+          aria-expanded={open}
+          title="Adjust score"
+        >
+          <span className="score-plate-value">{fmtScore(score)}</span>
+          <span className="score-plate-caret" aria-hidden="true">▾</span>
+        </button>
+        {open ? (
+          <div className={`score-plate-menu score-plate-menu-${side}`} role="menu">
+            <p className="score-plate-menu-label">Award point</p>
+            <div className="score-plate-row">
+              <button
+                type="button"
+                className="score-plate-action is-primary"
+                disabled={!canScore}
+                onClick={() => act(1)}
+              >
+                <span className="score-plate-action-label">Ippon</span>
+                <span className="score-plate-action-amt">+1</span>
+              </button>
+              <button
+                type="button"
+                className="score-plate-action"
+                disabled={!canScore}
+                onClick={() => act(0.5)}
+              >
+                <span className="score-plate-action-label">Half</span>
+                <span className="score-plate-action-amt">+½</span>
+              </button>
+            </div>
+            <p className="score-plate-menu-label is-undo">Undo</p>
+            <div className="score-plate-row">
+              <button
+                type="button"
+                className="score-plate-action is-undo"
+                disabled={!canUndoFull}
+                onClick={() => act(-1)}
+              >
+                <span className="score-plate-action-label">Ippon</span>
+                <span className="score-plate-action-amt">−1</span>
+              </button>
+              <button
+                type="button"
+                className="score-plate-action is-undo"
+                disabled={!canUndoHalf}
+                onClick={() => act(-0.5)}
+              >
+                <span className="score-plate-action-label">Half</span>
+                <span className="score-plate-action-amt">−½</span>
+              </button>
+            </div>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
+function MatchTimer({
+  timer,
+  durationSeconds,
+  locked,
+  disableStart,
+  onStart,
+  onPause,
+  onReset,
+  onExpire,
+  compact,
+}: {
+  timer: MatchTimerState | undefined
+  durationSeconds: number
+  locked?: boolean
+  disableStart?: boolean
+  onStart: () => void
+  onPause: () => void
+  onReset: () => void
+  onExpire: () => void
+  compact?: boolean
+}) {
+  const [, setTick] = useState(0)
+  const isRunning = timer?.runningSince != null
+  const remaining = getTimerRemainingMs(timer, durationSeconds)
+  const expired = remaining <= 0 && timer != null
+
+  useEffect(() => {
+    if (!isRunning) return
+    const id = window.setInterval(() => setTick((n) => n + 1), 200)
+    return () => window.clearInterval(id)
+  }, [isRunning])
+
+  useEffect(() => {
+    if (isRunning && remaining <= 0) {
+      onExpire()
+    }
+  }, [isRunning, remaining, onExpire])
+
+  return (
+    <div className={`match-timer${expired ? ' is-expired' : ''}${isRunning ? ' is-running' : ''}${compact ? ' is-compact' : ''}`}>
+      <span className="match-timer-display">{formatTimerMs(remaining)}</span>
+      {!locked ? (
+        <div className="match-timer-controls">
+          {!expired && !isRunning ? (
+            <button
+              type="button"
+              className="timer-btn timer-btn-icon"
+              onClick={onStart}
+              disabled={disableStart}
+              aria-label={timer && timer.remainingMs < durationSeconds * 1000 ? 'Resume' : 'Start'}
+              title={timer && timer.remainingMs < durationSeconds * 1000 ? 'Resume' : 'Start'}
+            >
+              <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                <path d="M4 2.8v10.4c0 .62.68 1 1.2.66l8.05-5.2a.79.79 0 0 0 0-1.32L5.2 2.14C4.68 1.8 4 2.18 4 2.8Z" fill="currentColor" />
+              </svg>
+            </button>
+          ) : null}
+          {isRunning ? (
+            <button
+              type="button"
+              className="timer-btn timer-btn-icon"
+              onClick={onPause}
+              aria-label="Pause"
+              title="Pause"
+            >
+              <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                <rect x="3.5" y="2.5" width="3.2" height="11" rx="0.8" fill="currentColor" />
+                <rect x="9.3" y="2.5" width="3.2" height="11" rx="0.8" fill="currentColor" />
+              </svg>
+            </button>
+          ) : null}
+          {timer && !isRunning ? (
+            <button
+              type="button"
+              className="timer-btn timer-btn-icon timer-btn-ghost"
+              onClick={onReset}
+              disabled={disableStart}
+              aria-label="Reset"
+              title="Reset"
+            >
+              <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                <path
+                  d="M3.2 8a4.8 4.8 0 1 0 1.45-3.43"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                />
+                <path d="M2 2.6v3.6h3.6" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 function MatchCard({
   match,
   matchScore,
   showScoring,
+  tournamentId,
+  timer,
+  durationSeconds,
+  disableStartIfOtherActive,
   onSelectWinner,
   onAddScore,
   onResetScore,
+  onTimerStart,
+  onTimerPause,
+  onTimerReset,
+  onTimerExpire,
 }: {
   match: BracketMatch
   matchScore?: MatchScore
   showScoring?: boolean
+  tournamentId?: string
+  timer?: MatchTimerState
+  durationSeconds: number
+  disableStartIfOtherActive?: boolean
   onSelectWinner: (matchId: string, entrantId: string) => void
-  onAddScore?: (matchId: string, side: 'left' | 'right', amount: 0.5 | 1) => void
+  onAddScore?: (matchId: string, side: 'left' | 'right', amount: 0.5 | 1 | -0.5 | -1) => void
   onResetScore?: (matchId: string) => void
+  onTimerStart?: (matchId: string) => void
+  onTimerPause?: (matchId: string) => void
+  onTimerReset?: (matchId: string) => void
+  onTimerExpire?: (matchId: string) => void
 }) {
   const canScore = showScoring && !match.isAutoAdvance
   const hasScore = matchScore && (matchScore.left > 0 || matchScore.right > 0)
+  const timeExpired = isTimerExpired(timer, durationSeconds)
+  const scoringLocked = match.isComplete || timeExpired
 
   return (
     <article className={`match-card stage-${match.stage}`}>
@@ -137,13 +504,36 @@ function MatchCard({
           <p className="match-code">{match.code}</p>
           <h4>{match.title}</h4>
         </div>
-        <span className={`match-state ${match.isComplete ? 'is-complete' : 'is-pending'}`}>
-          {match.isComplete ? (match.isAutoAdvance ? 'Auto-advanced' : 'Locked in') : 'Pending'}
-        </span>
+        <div className="match-header-actions">
+          <span className={`match-state ${match.isComplete ? 'is-complete' : 'is-pending'}`}>
+            {match.isComplete ? (match.isAutoAdvance ? 'Auto-advanced' : 'Locked in') : 'Pending'}
+          </span>
+          {tournamentId && !match.isAutoAdvance && match.left.entrant && match.right.entrant ? (
+            <a
+              className="scoreboard-link"
+              href={`/tournaments/${tournamentId}/match/${match.id}/scoreboard`}
+              target="_blank"
+              rel="noreferrer"
+              title="Open public scoreboard"
+            >
+              ↗ Scoreboard
+            </a>
+          ) : null}
+        </div>
       </header>
 
       {canScore ? (
         <>
+          <MatchTimer
+            timer={timer}
+            durationSeconds={durationSeconds}
+            locked={match.isComplete}
+            disableStart={disableStartIfOtherActive}
+            onStart={() => onTimerStart?.(match.id)}
+            onPause={() => onTimerPause?.(match.id)}
+            onReset={() => onTimerReset?.(match.id)}
+            onExpire={() => onTimerExpire?.(match.id)}
+          />
           {([{ slot: match.left, side: 'left' as const }, { slot: match.right, side: 'right' as const }]).map(
             ({ slot, side }) => {
               const entrant = slot.entrant
@@ -155,31 +545,36 @@ function MatchCard({
                   className={`score-slot${isWinner ? ' is-winner' : ''}${slot.isBye ? ' is-bye' : ''}`}
                 >
                   <span className="score-slot-name">{slot.label}</span>
-                  <div className="score-controls">
-                    <span className="score-value">
-                      {score % 1 === 0 ? score : score.toFixed(1)}
-                    </span>
-                    <button
-                      type="button"
-                      className="score-btn"
-                      disabled={!entrant || match.isComplete}
-                      onClick={() => entrant && onAddScore?.(match.id, side, 1)}
-                    >
-                      +1
-                    </button>
-                    <button
-                      type="button"
-                      className="score-btn"
-                      disabled={!entrant || match.isComplete}
-                      onClick={() => entrant && onAddScore?.(match.id, side, 0.5)}
-                    >
-                      +½
-                    </button>
-                  </div>
+                  <ScorePlate
+                    score={score}
+                    side={side}
+                    disabled={!entrant || scoringLocked}
+                    canScore={!!entrant && !scoringLocked}
+                    onScore={(amount) => entrant && onAddScore?.(match.id, side, amount)}
+                  />
                 </div>
               )
             },
           )}
+          {timeExpired && !match.isComplete ? (
+            <div className="timer-expired-block">
+              <p className="timer-expired-note">Time — bout drawn. Pick a winner to advance the bracket.</p>
+              <div className="timer-expired-actions">
+                {[match.left, match.right].map((slot) =>
+                  slot.entrant ? (
+                    <button
+                      key={slot.entrant.id}
+                      type="button"
+                      className="ghost-button"
+                      onClick={() => onSelectWinner(match.id, slot.entrant!.id)}
+                    >
+                      {slot.label}
+                    </button>
+                  ) : null,
+                )}
+              </div>
+            </div>
+          ) : null}
           {(hasScore || match.isComplete) ? (
             <button
               type="button"
@@ -227,12 +622,20 @@ function RoundColumns({
   showScoring,
   teams,
   lineups,
+  tournamentId,
+  timers,
+  durationSeconds,
+  activeTimerKey,
   onSelectWinner,
   onAddScore,
   onResetScore,
   onAddBoutScore,
   onResetTeamScore,
   onReorderMatchLineup,
+  onTimerStart,
+  onTimerPause,
+  onTimerReset,
+  onTimerExpire,
 }: {
   title: string
   rounds: BracketRound[]
@@ -240,12 +643,20 @@ function RoundColumns({
   showScoring?: boolean
   teams?: TeamEntry[]
   lineups?: Record<string, { left: string[]; right: string[] }>
+  tournamentId?: string
+  timers: Record<string, MatchTimerState>
+  durationSeconds: number
+  activeTimerKey: string | null
   onSelectWinner: (matchId: string, entrantId: string) => void
-  onAddScore?: (matchId: string, side: 'left' | 'right', amount: 0.5 | 1) => void
+  onAddScore?: (matchId: string, side: 'left' | 'right', amount: 0.5 | 1 | -0.5 | -1) => void
   onResetScore?: (matchId: string) => void
-  onAddBoutScore?: (matchId: string, boutIndex: number, side: 'left' | 'right', amount: 0.5 | 1) => void
+  onAddBoutScore?: (matchId: string, boutIndex: number, side: 'left' | 'right', amount: 0.5 | 1 | -0.5 | -1) => void
   onResetTeamScore?: (matchId: string) => void
   onReorderMatchLineup?: (matchId: string, side: 'left' | 'right', memberId: string, toIndex: number) => void
+  onTimerStart: (key: string) => void
+  onTimerPause: (key: string) => void
+  onTimerReset: (key: string) => void
+  onTimerExpire: (key: string) => void
 }) {
   if (rounds.length === 0) {
     return null
@@ -273,10 +684,18 @@ function RoundColumns({
                     rightTeam={teams.find((t) => t.id === match.right.entrant?.id)}
                     scores={scores}
                     lineups={lineups ?? {}}
+                    tournamentId={tournamentId}
+                    timers={timers}
+                    durationSeconds={durationSeconds}
+                    activeTimerKey={activeTimerKey}
                     onSelectWinner={onSelectWinner}
                     onAddBoutScore={onAddBoutScore!}
                     onResetTeamScore={onResetTeamScore!}
                     onReorderMatchLineup={onReorderMatchLineup!}
+                    onTimerStart={onTimerStart}
+                    onTimerPause={onTimerPause}
+                    onTimerReset={onTimerReset}
+                    onTimerExpire={onTimerExpire}
                   />
                 ) : (
                   <MatchCard
@@ -284,9 +703,17 @@ function RoundColumns({
                     match={match}
                     matchScore={scores[match.id]}
                     showScoring={showScoring}
+                    tournamentId={tournamentId}
+                    timer={timers[match.id]}
+                    durationSeconds={durationSeconds}
+                    disableStartIfOtherActive={activeTimerKey != null && activeTimerKey !== match.id}
                     onSelectWinner={onSelectWinner}
                     onAddScore={onAddScore}
                     onResetScore={onResetScore}
+                    onTimerStart={onTimerStart}
+                    onTimerPause={onTimerPause}
+                    onTimerReset={onTimerReset}
+                    onTimerExpire={onTimerExpire}
                   />
                 ),
               )}
@@ -304,20 +731,36 @@ function TeamMatchCard({
   rightTeam,
   scores,
   lineups,
+  tournamentId,
+  timers,
+  durationSeconds,
+  activeTimerKey,
   onSelectWinner,
   onAddBoutScore,
   onResetTeamScore,
   onReorderMatchLineup,
+  onTimerStart,
+  onTimerPause,
+  onTimerReset,
+  onTimerExpire,
 }: {
   match: BracketMatch
   leftTeam?: TeamEntry
   rightTeam?: TeamEntry
   scores: Record<string, MatchScore>
   lineups: Record<string, { left: string[]; right: string[] }>
+  tournamentId?: string
+  timers: Record<string, MatchTimerState>
+  durationSeconds: number
+  activeTimerKey: string | null
   onSelectWinner: (matchId: string, entrantId: string) => void
-  onAddBoutScore: (matchId: string, boutIndex: number, side: 'left' | 'right', amount: 0.5 | 1) => void
+  onAddBoutScore: (matchId: string, boutIndex: number, side: 'left' | 'right', amount: 0.5 | 1 | -0.5 | -1) => void
   onResetTeamScore: (matchId: string) => void
   onReorderMatchLineup: (matchId: string, side: 'left' | 'right', memberId: string, toIndex: number) => void
+  onTimerStart: (key: string) => void
+  onTimerPause: (key: string) => void
+  onTimerReset: (key: string) => void
+  onTimerExpire: (key: string) => void
 }) {
   const [lineupDrag, setLineupDrag] = useState<{ side: 'left' | 'right'; memberId: string } | null>(null)
   const [lineupOver, setLineupOver] = useState<{ side: 'left' | 'right'; index: number } | null>(null)
@@ -384,9 +827,22 @@ function TeamMatchCard({
           <p className="match-code">{match.code}</p>
           <h4>{match.title}</h4>
         </div>
-        <span className={`match-state ${match.isComplete ? 'is-complete' : 'is-pending'}`}>
-          {match.isComplete ? 'Locked in' : 'Pending'}
-        </span>
+        <div className="match-header-actions">
+          <span className={`match-state ${match.isComplete ? 'is-complete' : 'is-pending'}`}>
+            {match.isComplete ? 'Locked in' : 'Pending'}
+          </span>
+          {tournamentId && match.left.entrant && match.right.entrant ? (
+            <a
+              className="scoreboard-link"
+              href={`/tournaments/${tournamentId}/match/${match.id}/scoreboard`}
+              target="_blank"
+              rel="noreferrer"
+              title="Open public scoreboard"
+            >
+              ↗ Scoreboard
+            </a>
+          ) : null}
+        </div>
       </header>
 
       {/* Per-match lineup editor — draggable until scoring starts */}
@@ -461,64 +917,59 @@ function TeamMatchCard({
         {Array.from({ length: boutsTotal }, (_, boutIndex) => {
           const leftMember = leftMembers[boutIndex]
           const rightMember = rightMembers[boutIndex]
-          const boutScore = scores[getBoutKey(match.id, boutIndex)] ?? { left: 0, right: 0 }
+          const boutKey = getBoutKey(match.id, boutIndex)
+          const boutScore = scores[boutKey] ?? { left: 0, right: 0 }
           const leftWonBout = boutScore.left >= 2 && boutScore.left > boutScore.right
           const rightWonBout = boutScore.right >= 2 && boutScore.right > boutScore.left
           const boutDone = boutScore.left >= 2 || boutScore.right >= 2
+          const boutTimer = timers[boutKey]
+          const boutTimeExpired = isTimerExpired(boutTimer, durationSeconds)
+          const boutLocked = boutDone || boutTimeExpired
 
           return (
-            <div key={boutIndex} className="bout-row">
+            <div key={boutIndex} className={`bout-row${boutTimeExpired && !boutDone ? ' is-time-draw' : ''}`}>
               <span className="bout-pos">{getKendoPosition(boutIndex, boutsTotal)}</span>
 
-              {/* Left side: name then score + buttons */}
-              <div className={`bout-left${leftWonBout ? ' bout-won' : ''}`}>
-                <span className="bout-name">{leftMember?.name.trim() || 'Open slot'}</span>
-                <div className="bout-controls">
-                  <span className="score-value">{fmtScore(boutScore.left)}</span>
-                  <button
-                    type="button"
-                    className="score-btn"
-                    disabled={boutDone || match.isComplete}
-                    onClick={() => onAddBoutScore(match.id, boutIndex, 'left', 1)}
-                  >
-                    +1
-                  </button>
-                  <button
-                    type="button"
-                    className="score-btn"
-                    disabled={boutDone || match.isComplete}
-                    onClick={() => onAddBoutScore(match.id, boutIndex, 'left', 0.5)}
-                  >
-                    +½
-                  </button>
+              {/* Names + scores row. display:contents in normal so left/right enter the parent grid */}
+              <div className="bout-names-row">
+                <div className={`bout-left${leftWonBout ? ' bout-won' : ''}`}>
+                  <span className="bout-name">{leftMember?.name.trim() || 'Open slot'}</span>
+                  <ScorePlate
+                    score={boutScore.left}
+                    side="left"
+                    disabled={boutLocked}
+                    canScore={!boutLocked}
+                    onScore={(amount) => onAddBoutScore(match.id, boutIndex, 'left', amount)}
+                  />
+                </div>
+
+                {/* Kanji VS divider — only visible in fullscreen */}
+                <span className="bout-vs-kanji" aria-hidden="true">対</span>
+
+                <div className={`bout-right${rightWonBout ? ' bout-won' : ''}`}>
+                  <ScorePlate
+                    score={boutScore.right}
+                    side="right"
+                    disabled={boutLocked}
+                    canScore={!boutLocked}
+                    onScore={(amount) => onAddBoutScore(match.id, boutIndex, 'right', amount)}
+                  />
+                  <span className="bout-name">{rightMember?.name.trim() || 'Open slot'}</span>
                 </div>
               </div>
 
-              <span className="bout-divider">vs</span>
-
-              {/* Right side: buttons + score then name (mirrored) */}
-              <div className={`bout-right${rightWonBout ? ' bout-won' : ''}`}>
-                <div className="bout-controls">
-                  <button
-                    type="button"
-                    className="score-btn"
-                    disabled={boutDone || match.isComplete}
-                    onClick={() => onAddBoutScore(match.id, boutIndex, 'right', 0.5)}
-                  >
-                    +½
-                  </button>
-                  <button
-                    type="button"
-                    className="score-btn"
-                    disabled={boutDone || match.isComplete}
-                    onClick={() => onAddBoutScore(match.id, boutIndex, 'right', 1)}
-                  >
-                    +1
-                  </button>
-                  <span className="score-value">{fmtScore(boutScore.right)}</span>
-                </div>
-                <span className="bout-name">{rightMember?.name.trim() || 'Open slot'}</span>
-              </div>
+              {/* Timer — compact center column in normal mode, full-width row in fullscreen */}
+              <MatchTimer
+                compact
+                timer={boutTimer}
+                durationSeconds={durationSeconds}
+                locked={boutDone}
+                disableStart={activeTimerKey != null && activeTimerKey !== boutKey}
+                onStart={() => onTimerStart(boutKey)}
+                onPause={() => onTimerPause(boutKey)}
+                onReset={() => onTimerReset(boutKey)}
+                onExpire={() => onTimerExpire(boutKey)}
+              />
             </div>
           )
         })}
@@ -626,6 +1077,15 @@ function formatDate(dateString: string) {
   }).format(new Date(dateString))
 }
 
+type TournamentStatus = 'active' | 'upcoming' | 'past'
+
+function getTournamentStatus(tournament: TournamentRecord): TournamentStatus {
+  if (getTournamentInsight(tournament).isComplete) return 'past'
+  const hasStarted =
+    Object.keys(tournament.results).length > 0 || Object.keys(tournament.scores).length > 0
+  return hasStarted ? 'active' : 'upcoming'
+}
+
 function reorderByIndex<T extends { id: string }>(
   items: T[],
   fromMemberId: string,
@@ -666,8 +1126,10 @@ function AppFrame({
     <div className="page-shell">
       <header className="topbar">
         <Link to="/" className="brand-block">
-          <span>Kendo Tournament</span>
-          <strong>Championship Desk</strong>
+          <span className="brand-block-text">
+            <span>Kendo Tournament</span>
+            <strong>Championship Desk</strong>
+          </span>
         </Link>
         <div className="topbar-actions">{action}</div>
       </header>
@@ -676,8 +1138,17 @@ function AppFrame({
   )
 }
 
-function TournamentCard({ tournament }: { tournament: TournamentRecord }) {
+function TournamentCard({
+  tournament,
+  onDelete,
+}: {
+  tournament: TournamentRecord
+  onDelete?: (id: string) => void
+}) {
   const insight = getTournamentInsight(tournament)
+  const status = getTournamentStatus(tournament)
+  const statusChip = status === 'past' ? 'Past' : status === 'active' ? 'Active' : 'Upcoming'
+  const statusClass = status === 'past' ? 'is-complete' : status === 'active' ? 'is-live' : 'is-upcoming'
 
   return (
     <article className="tournament-card">
@@ -686,8 +1157,8 @@ function TournamentCard({ tournament }: { tournament: TournamentRecord }) {
           <p>{tournament.kind === 'single' ? 'Individual event' : 'Team event'}</p>
           <h3>{tournament.name}</h3>
         </div>
-        <span className={`status-chip ${insight.isComplete ? 'is-complete' : 'is-live'}`}>
-          {insight.isComplete ? 'Past' : 'Current'}
+        <span className={`status-chip ${statusClass}`}>
+          {statusChip}
         </span>
       </div>
 
@@ -714,17 +1185,40 @@ function TournamentCard({ tournament }: { tournament: TournamentRecord }) {
 
       <footer className="tournament-card-footer">
         <span>Updated {formatDate(tournament.updatedAt)}</span>
-        <Link to={`/tournaments/${tournament.id}`} className="inline-link">
-          Open tournament
-        </Link>
+        <div className="tournament-card-actions">
+          {onDelete && (
+            <button
+              type="button"
+              className="tournament-card-delete"
+              onClick={(event) => {
+                event.preventDefault()
+                if (window.confirm(`Delete "${tournament.name}" from local storage?`)) {
+                  onDelete(tournament.id)
+                }
+              }}
+            >
+              Delete
+            </button>
+          )}
+          <Link to={`/tournaments/${tournament.id}`} className="inline-link">
+            Open tournament
+          </Link>
+        </div>
       </footer>
     </article>
   )
 }
 
-function HomePage({ tournaments }: { tournaments: TournamentRecord[] }) {
-  const currentTournaments = tournaments.filter((tournament) => !getTournamentInsight(tournament).isComplete)
-  const pastTournaments = tournaments.filter((tournament) => getTournamentInsight(tournament).isComplete)
+function HomePage({
+  tournaments,
+  onDeleteTournament,
+}: {
+  tournaments: TournamentRecord[]
+  onDeleteTournament: (id: string) => void
+}) {
+  const activeTournaments = tournaments.filter((t) => getTournamentStatus(t) === 'active')
+  const upcomingTournaments = tournaments.filter((t) => getTournamentStatus(t) === 'upcoming')
+  const pastTournaments = tournaments.filter((t) => getTournamentStatus(t) === 'past')
 
   return (
     <AppFrame
@@ -747,22 +1241,49 @@ function HomePage({ tournaments }: { tournaments: TournamentRecord[] }) {
       <section className="list-section">
         <div className="section-header-row">
           <div>
-            <p className="eyebrow">Current</p>
+            <p className="eyebrow">In progress</p>
             <h2>Active tournaments</h2>
           </div>
-          <span>{currentTournaments.length} live</span>
+          <span>{activeTournaments.length} live</span>
         </div>
 
-        {currentTournaments.length > 0 ? (
+        {activeTournaments.length > 0 ? (
           <div className="tournament-grid">
-            {currentTournaments.map((tournament) => (
+            {activeTournaments.map((tournament) => (
               <TournamentCard key={tournament.id} tournament={tournament} />
             ))}
           </div>
         ) : (
           <div className="empty-card">
             <h3>No active tournaments</h3>
-            <p>Create a new bracket to start tracking a live event.</p>
+            <p>Tournaments appear here once the first bout is scored.</p>
+          </div>
+        )}
+      </section>
+
+      <section className="list-section">
+        <div className="section-header-row">
+          <div>
+            <p className="eyebrow">Not started</p>
+            <h2>Upcoming tournaments</h2>
+          </div>
+          <span>{upcomingTournaments.length} pending</span>
+        </div>
+
+        {upcomingTournaments.length > 0 ? (
+          <div className="tournament-grid">
+            {upcomingTournaments.map((tournament) => (
+              <TournamentCard
+                key={tournament.id}
+                tournament={tournament}
+                onDelete={onDeleteTournament}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="empty-card">
+            <h3>No upcoming tournaments</h3>
+            <p>Create a new bracket to queue up an event.</p>
           </div>
         )}
       </section>
@@ -779,7 +1300,11 @@ function HomePage({ tournaments }: { tournaments: TournamentRecord[] }) {
         {pastTournaments.length > 0 ? (
           <div className="tournament-grid">
             {pastTournaments.map((tournament) => (
-              <TournamentCard key={tournament.id} tournament={tournament} />
+              <TournamentCard
+                key={tournament.id}
+                tournament={tournament}
+                onDelete={onDeleteTournament}
+              />
             ))}
           </div>
         ) : (
@@ -838,6 +1363,7 @@ function SinglesEditor({
 
 function TeamsEditor({
   teams,
+  locked = false,
   onUpdateTeam,
   onRemoveTeam,
   onAddTeam,
@@ -846,6 +1372,7 @@ function TeamsEditor({
   onAddMember,
 }: {
   teams: TeamEntry[]
+  locked?: boolean
   onUpdateTeam: (teamId: string, name: string) => void
   onRemoveTeam: (teamId: string) => void
   onAddTeam: () => void
@@ -865,9 +1392,11 @@ function TeamsEditor({
           <div key={team.id} className="entry-card team-entry-card">
             <div className="entry-header">
               <span>Team {index + 1}</span>
-              <button type="button" onClick={() => onRemoveTeam(team.id)}>
-                Remove team
-              </button>
+              {!locked && (
+                <button type="button" onClick={() => onRemoveTeam(team.id)}>
+                  Remove team
+                </button>
+              )}
             </div>
             <input
               value={team.name}
@@ -883,27 +1412,33 @@ function TeamsEditor({
                     onChange={(event) => onUpdateMember(team.id, member.id, event.target.value)}
                     placeholder="Member name"
                   />
-                  <button
-                    type="button"
-                    className="remove-member-btn"
-                    onClick={() => onRemoveMember(team.id, member.id)}
-                    aria-label={`Remove member ${memberIndex + 1}`}
-                  >
-                    ×
-                  </button>
+                  {!locked && (
+                    <button
+                      type="button"
+                      className="remove-member-btn"
+                      onClick={() => onRemoveMember(team.id, member.id)}
+                      aria-label={`Remove member ${memberIndex + 1}`}
+                    >
+                      ×
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
-            <button type="button" className="ghost-button" onClick={() => onAddMember(team.id)}>
-              Add team member
-            </button>
+            {!locked ? (
+              <button type="button" className="ghost-button" onClick={() => onAddMember(team.id)}>
+                Add team member
+              </button>
+            ) : null}
           </div>
         ))}
       </div>
 
-      <button type="button" className="primary-button" onClick={onAddTeam}>
-        Add team
-      </button>
+      {!locked ? (
+        <button type="button" className="primary-button" onClick={onAddTeam}>
+          Add team
+        </button>
+      ) : null}
     </div>
   )
 }
@@ -1009,6 +1544,11 @@ function TournamentWizard({
                   </button>
                 </div>
               </div>
+
+              <DurationField
+                seconds={draft.matchDurationSeconds}
+                onChange={(seconds) => setDraft((current) => ({ ...current, matchDurationSeconds: seconds }))}
+              />
             </div>
           ) : null}
 
@@ -1181,7 +1721,7 @@ function TournamentWorkbench({
   const teamScoringTeams = tournament.kind === 'team' ? tournament.teams : undefined
   const teamLineups = tournament.kind === 'team' ? (tournament.lineups ?? {}) : undefined
 
-  function handleAddScore(matchId: string, side: 'left' | 'right', amount: 0.5 | 1) {
+  function handleAddScore(matchId: string, side: 'left' | 'right', amount: 0.5 | 1 | -0.5 | -1) {
     onChange((current) => {
       // Recompute bracket from `current` (the latest committed state) rather than
       // the stale `bracket` closure captured at render time. Without this, a score
@@ -1199,13 +1739,18 @@ function TournamentWorkbench({
         : []
       const match = allMatches.find((m) => m.id === matchId)
 
-      // Guard: do not score a match that is already decided or has only one entrant.
-      if (!match || match.isComplete || match.isAutoAdvance) {
+      // Guard: do not score a match that has only one entrant. Allow undo on
+      // completed matches so a mistake can be corrected.
+      if (!match || match.isAutoAdvance) {
+        return current
+      }
+      if (match.isComplete && amount > 0) {
         return current
       }
 
       const existing = (current.scores ?? {})[matchId] ?? { left: 0, right: 0 }
-      const nextScore = { ...existing, [side]: existing[side] + amount }
+      const nextSideScore = Math.max(0, existing[side] + amount)
+      const nextScore = { ...existing, [side]: nextSideScore }
 
       let nextResults = current.results
       if (nextScore.left >= 2 || nextScore.right >= 2) {
@@ -1213,6 +1758,11 @@ function TournamentWorkbench({
         if (winner) {
           nextResults = { ...current.results, [matchId]: winner.id }
         }
+      } else if (current.results[matchId]) {
+        // Score dropped below winning threshold via undo — clear stored result so
+        // the bracket re-opens this match.
+        const { [matchId]: _r, ...rest } = current.results
+        nextResults = rest
       }
 
       return {
@@ -1237,7 +1787,7 @@ function TournamentWorkbench({
     })
   }
 
-  function handleAddBoutScore(matchId: string, boutIndex: number, side: 'left' | 'right', amount: 0.5 | 1) {
+  function handleAddBoutScore(matchId: string, boutIndex: number, side: 'left' | 'right', amount: 0.5 | 1 | -0.5 | -1) {
     onChange((current) => {
       // Always recompute from current state to avoid stale closures
       const currentEntrants = toTournamentEntrants(current.kind, current.singles, current.teams)
@@ -1249,14 +1799,15 @@ function TournamentWorkbench({
             .flatMap((r) => r.matches)
         : []
       const match = allMatches.find((m) => m.id === matchId)
-      if (!match || match.isComplete || match.isAutoAdvance) return current
+      if (!match || match.isAutoAdvance) return current
 
       const boutKey = getBoutKey(matchId, boutIndex)
       const existing = (current.scores ?? {})[boutKey] ?? { left: 0, right: 0 }
-      // Bout already finished — ignore
-      if (existing.left >= 2 || existing.right >= 2) return current
+      // Bout already finished — only allow undo (negative amount).
+      if ((existing.left >= 2 || existing.right >= 2) && amount > 0) return current
 
-      const nextBoutScore = { ...existing, [side]: existing[side] + amount }
+      const nextSideScore = Math.max(0, existing[side] + amount)
+      const nextBoutScore = { ...existing, [side]: nextSideScore }
       const nextScores = { ...(current.scores ?? {}), [boutKey]: nextBoutScore }
 
       // Determine team match winner from all bout scores (with updated score)
@@ -1272,6 +1823,10 @@ function TournamentWorkbench({
         if (winnerEntrant) {
           nextResults = { ...current.results, [matchId]: winnerEntrant.id }
         }
+      } else if (current.results[matchId]) {
+        // Match no longer has a determined winner — clear so bracket re-opens it.
+        const { [matchId]: _r, ...rest } = current.results
+        nextResults = rest
       }
 
       return {
@@ -1334,6 +1889,103 @@ function TournamentWorkbench({
       }
     })
   }
+
+  function handleTimerStart(key: string) {
+    onChange((current) => {
+      const durationMs = (current.matchDurationSeconds ?? DEFAULT_MATCH_DURATION_SECONDS) * 1000
+      const existing = current.timers?.[key]
+      const remainingMs = existing
+        ? (existing.runningSince != null
+          ? Math.max(0, existing.remainingMs - (Date.now() - existing.runningSince))
+          : existing.remainingMs)
+        : durationMs
+      if (remainingMs <= 0) return current
+      return {
+        ...current,
+        timers: {
+          ...(current.timers ?? {}),
+          [key]: { remainingMs, runningSince: Date.now() },
+        },
+        updatedAt: new Date().toISOString(),
+      }
+    })
+  }
+
+  function handleTimerPause(key: string) {
+    onChange((current) => {
+      const existing = current.timers?.[key]
+      if (!existing || existing.runningSince == null) return current
+      const remainingMs = Math.max(0, existing.remainingMs - (Date.now() - existing.runningSince))
+      return {
+        ...current,
+        timers: {
+          ...(current.timers ?? {}),
+          [key]: { remainingMs, runningSince: null },
+        },
+        updatedAt: new Date().toISOString(),
+      }
+    })
+  }
+
+  function handleTimerReset(key: string) {
+    onChange((current) => {
+      const { [key]: _removed, ...rest } = current.timers ?? {}
+      return {
+        ...current,
+        timers: rest,
+        updatedAt: new Date().toISOString(),
+      }
+    })
+  }
+
+  function handleTimerExpire(key: string) {
+    onChange((current) => {
+      const existing = current.timers?.[key]
+      if (existing && existing.runningSince == null && existing.remainingMs <= 0) return current
+      return {
+        ...current,
+        timers: {
+          ...(current.timers ?? {}),
+          [key]: { remainingMs: 0, runningSince: null },
+        },
+        updatedAt: new Date().toISOString(),
+      }
+    })
+  }
+
+  function handleSetMatchDuration(seconds: number) {
+    onChange((current) => ({
+      ...current,
+      matchDurationSeconds: Math.max(1, Math.round(seconds)),
+      updatedAt: new Date().toISOString(),
+    }))
+  }
+
+  // Find the currently running timer (if any). Used to disable Start on every
+  // other timer so only one match can be running at a time.
+  const activeTimerKey = (() => {
+    const timers = tournament.timers ?? {}
+    const dSec = tournament.matchDurationSeconds ?? DEFAULT_MATCH_DURATION_SECONDS
+    for (const [key, t] of Object.entries(timers)) {
+      if (t.runningSince != null && getTimerRemainingMs(t, dSec) > 0) return key
+    }
+    return null
+  })()
+
+  const [bracketFullscreen, setBracketFullscreen] = useState(false)
+  useEffect(() => {
+    if (!bracketFullscreen) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setBracketFullscreen(false)
+    }
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.body.style.overflow = prev
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [bracketFullscreen])
 
   return (
     <>
@@ -1411,14 +2063,14 @@ function TournamentWorkbench({
                 <button
                   type="button"
                   className={tournament.kind === 'single' ? 'is-active' : ''}
-                  onClick={() => onChange((current) => ({ ...current, kind: 'single' }))}
+                  disabled
                 >
                   Single
                 </button>
                 <button
                   type="button"
                   className={tournament.kind === 'team' ? 'is-active' : ''}
-                  onClick={() => onChange((current) => ({ ...current, kind: 'team' }))}
+                  disabled
                 >
                   Team
                 </button>
@@ -1445,11 +2097,17 @@ function TournamentWorkbench({
               </div>
             </div>
 
+            <DurationField
+              seconds={tournament.matchDurationSeconds ?? DEFAULT_MATCH_DURATION_SECONDS}
+              onChange={handleSetMatchDuration}
+              disabled={Object.keys(tournament.results).length > 0 || Object.keys(tournament.scores).length > 0}
+            />
+
             <div className="utility-row">
               <button
                 type="button"
                 className="ghost-button"
-                onClick={() => onChange((current) => ({ ...current, results: {}, scores: {} }))}
+                onClick={() => onChange((current) => ({ ...current, results: {}, scores: {}, timers: {} }))}
               >
                 Clear bracket results
               </button>
@@ -1483,6 +2141,7 @@ function TournamentWorkbench({
           ) : (
             <TeamsEditor
               teams={tournament.teams}
+              locked={Object.keys(tournament.results).length > 0 || Object.keys(tournament.scores).length > 0}
               onUpdateTeam={(teamId, name) =>
                 onChange((current) => ({
                   ...current,
@@ -1586,10 +2245,21 @@ function TournamentWorkbench({
           </div>
 
           {bracket ? (
-            <div className="panel-card bracket-panel">
-              <div className="panel-heading">
-                <p>Diagram</p>
-                <h2>Live tournament bracket</h2>
+            <div className={`panel-card bracket-panel${bracketFullscreen ? ' is-fullscreen' : ''}`}>
+              <div className="panel-heading bracket-heading">
+                <div>
+                  <p>Diagram</p>
+                  <h2>Live tournament bracket</h2>
+                </div>
+                <button
+                  type="button"
+                  className="ghost-button bracket-fullscreen-toggle"
+                  onClick={() => setBracketFullscreen((v) => !v)}
+                  aria-pressed={bracketFullscreen}
+                  title={bracketFullscreen ? 'Exit fullscreen (Esc)' : 'Open in fullscreen for projection'}
+                >
+                  {bracketFullscreen ? '✕  Exit fullscreen' : '⛶  Fullscreen'}
+                </button>
               </div>
 
               <RoundColumns
@@ -1599,6 +2269,7 @@ function TournamentWorkbench({
                 showScoring={showScoring}
                 teams={teamScoringTeams}
                 lineups={teamLineups}
+                tournamentId={tournament.id}
                 onSelectWinner={(matchId, entrantId) =>
                   onChange((current) => ({
                     ...current,
@@ -1613,6 +2284,13 @@ function TournamentWorkbench({
                 onAddBoutScore={handleAddBoutScore}
                 onResetTeamScore={handleResetTeamScore}
                 onReorderMatchLineup={handleReorderMatchLineup}
+                timers={tournament.timers ?? {}}
+                durationSeconds={tournament.matchDurationSeconds ?? DEFAULT_MATCH_DURATION_SECONDS}
+                activeTimerKey={activeTimerKey}
+                onTimerStart={handleTimerStart}
+                onTimerPause={handleTimerPause}
+                onTimerReset={handleTimerReset}
+                onTimerExpire={handleTimerExpire}
               />
               <RoundColumns
                 title="Losers bracket"
@@ -1621,6 +2299,7 @@ function TournamentWorkbench({
                 showScoring={showScoring}
                 teams={teamScoringTeams}
                 lineups={teamLineups}
+                tournamentId={tournament.id}
                 onSelectWinner={(matchId, entrantId) =>
                   onChange((current) => ({
                     ...current,
@@ -1635,6 +2314,13 @@ function TournamentWorkbench({
                 onAddBoutScore={handleAddBoutScore}
                 onResetTeamScore={handleResetTeamScore}
                 onReorderMatchLineup={handleReorderMatchLineup}
+                timers={tournament.timers ?? {}}
+                durationSeconds={tournament.matchDurationSeconds ?? DEFAULT_MATCH_DURATION_SECONDS}
+                activeTimerKey={activeTimerKey}
+                onTimerStart={handleTimerStart}
+                onTimerPause={handleTimerPause}
+                onTimerReset={handleTimerReset}
+                onTimerExpire={handleTimerExpire}
               />
               <RoundColumns
                 title="Finals"
@@ -1643,6 +2329,7 @@ function TournamentWorkbench({
                 showScoring={showScoring}
                 teams={teamScoringTeams}
                 lineups={teamLineups}
+                tournamentId={tournament.id}
                 onSelectWinner={(matchId, entrantId) =>
                   onChange((current) => ({
                     ...current,
@@ -1657,6 +2344,13 @@ function TournamentWorkbench({
                 onAddBoutScore={handleAddBoutScore}
                 onResetTeamScore={handleResetTeamScore}
                 onReorderMatchLineup={handleReorderMatchLineup}
+                timers={tournament.timers ?? {}}
+                durationSeconds={tournament.matchDurationSeconds ?? DEFAULT_MATCH_DURATION_SECONDS}
+                activeTimerKey={activeTimerKey}
+                onTimerStart={handleTimerStart}
+                onTimerPause={handleTimerPause}
+                onTimerReset={handleTimerReset}
+                onTimerExpire={handleTimerExpire}
               />
             </div>
           ) : null}
@@ -1734,6 +2428,209 @@ function TournamentDetailPage({
   )
 }
 
+function MatchScoreboardPage({ tournaments }: { tournaments: TournamentRecord[] }) {
+  const { tournamentId, matchId } = useParams<{ tournamentId: string; matchId: string }>()
+  const tournament = tournaments.find((t) => t.id === tournamentId)
+
+  useEffect(() => {
+    document.body.classList.add('scoreboard-body')
+    return () => { document.body.classList.remove('scoreboard-body') }
+  }, [])
+
+  if (!tournament || !matchId) {
+    return (
+      <main className="scoreboard scoreboard-empty">
+        <p className="scoreboard-eyebrow">Scoreboard</p>
+        <h1>Match not found</h1>
+        <p className="scoreboard-hint">This tournament or match no longer exists.</p>
+      </main>
+    )
+  }
+
+  const entrants = toTournamentEntrants(tournament.kind, tournament.singles, tournament.teams)
+  if (entrants.length < 2) {
+    return (
+      <main className="scoreboard scoreboard-empty">
+        <p className="scoreboard-eyebrow">Scoreboard</p>
+        <h1>Bracket not ready</h1>
+      </main>
+    )
+  }
+
+  const bracket = buildTournamentBracket(entrants, tournament.format, tournament.results)
+  const allMatches = [
+    ...bracket.winnersRounds,
+    ...bracket.losersRounds,
+    ...bracket.finalRounds,
+  ].flatMap((r) => r.matches)
+  const match = allMatches.find((m) => m.id === matchId)
+
+  if (!match || !match.left.entrant || !match.right.entrant) {
+    return (
+      <main className="scoreboard scoreboard-empty">
+        <p className="scoreboard-eyebrow">Scoreboard</p>
+        <h1>Match not available</h1>
+        <p className="scoreboard-hint">{tournament.name}</p>
+      </main>
+    )
+  }
+
+  const isTeam = tournament.kind === 'team'
+
+  if (!isTeam) {
+    const score = tournament.scores[match.id] ?? { left: 0, right: 0 }
+    const winnerId = tournament.results[match.id]
+    const singlesDuration = tournament.matchDurationSeconds ?? DEFAULT_MATCH_DURATION_SECONDS
+    const singlesTimer = tournament.timers?.[match.id]
+    return (
+      <main className="scoreboard scoreboard-singles">
+        <header className="scoreboard-top">
+          <p className="scoreboard-eyebrow">{tournament.name}</p>
+          <h1>{match.title}</h1>
+          <p className="scoreboard-code">
+            {match.code}
+            {' \u00b7 '}
+            <ScoreboardClock timer={singlesTimer} durationSeconds={singlesDuration} />
+          </p>
+        </header>
+        <section className="scoreboard-duel">
+          <div className={`scoreboard-side${winnerId === match.left.entrant.id ? ' is-winner' : ''}`}>
+            <span className="scoreboard-score">{score.left % 1 === 0 ? score.left : score.left.toFixed(1)}</span>
+            <span className="scoreboard-name">{match.left.label}</span>
+          </div>
+          <div className="scoreboard-divider" aria-hidden="true">VS</div>
+          <div className={`scoreboard-side${winnerId === match.right.entrant.id ? ' is-winner' : ''}`}>
+            <span className="scoreboard-score">{score.right % 1 === 0 ? score.right : score.right.toFixed(1)}</span>
+            <span className="scoreboard-name">{match.right.label}</span>
+          </div>
+        </section>
+        {winnerId ? (
+          <p className="scoreboard-victor">
+            Victor — {winnerId === match.left.entrant.id ? match.left.label : match.right.label}
+          </p>
+        ) : (
+          <p className="scoreboard-victor scoreboard-victor-pending">In progress</p>
+        )}
+      </main>
+    )
+  }
+
+  // Team match
+  const leftTeam = tournament.teams.find((t) => t.id === match.left.entrant!.id)
+  const rightTeam = tournament.teams.find((t) => t.id === match.right.entrant!.id)
+  const lineup = tournament.lineups?.[match.id]
+  const leftMembers = resolveMatchLineup(leftTeam, lineup?.left)
+  const rightMembers = resolveMatchLineup(rightTeam, lineup?.right)
+  const boutsTotal = Math.min(leftMembers.length, rightMembers.length)
+  const boutScores = Array.from({ length: boutsTotal }, (_, i) => tournament.scores?.[getBoutKey(match.id, i)])
+  const stats = computeTeamStats(boutScores, boutsTotal)
+  const winnerId = tournament.results?.[match.id]
+  const fmt = (n: number) => (n % 1 === 0 ? String(n) : n.toFixed(1))
+  const durationSeconds = tournament.matchDurationSeconds ?? DEFAULT_MATCH_DURATION_SECONDS
+  const boutTimers = Array.from({ length: boutsTotal }, (_, i) => tournament.timers?.[getBoutKey(match.id, i)])
+  // A bout is "done" if a winner is decided OR the timer has expired (drawn).
+  const currentBoutIndex = boutScores.findIndex((s, i) => {
+    const decided = s && (s.left >= 2 || s.right >= 2)
+    const expired = isTimerExpired(boutTimers[i], durationSeconds)
+    return !decided && !expired
+  })
+
+  // Default to the current bout, but fall back to the last bout once everything is done.
+  const focusBoutIndex = currentBoutIndex >= 0 && currentBoutIndex < boutsTotal
+    ? currentBoutIndex
+    : boutsTotal - 1
+  const focusBout = focusBoutIndex >= 0 ? (boutScores[focusBoutIndex] ?? { left: 0, right: 0 }) : null
+  const focusLeftPlayer = focusBoutIndex >= 0 ? leftMembers[focusBoutIndex] : undefined
+  const focusRightPlayer = focusBoutIndex >= 0 ? rightMembers[focusBoutIndex] : undefined
+  const focusLeftWon = focusBout ? focusBout.left >= 2 && focusBout.left > focusBout.right : false
+  const focusRightWon = focusBout ? focusBout.right >= 2 && focusBout.right > focusBout.left : false
+  const isLive = currentBoutIndex >= 0 && currentBoutIndex < boutsTotal
+  const focusLabel = focusBoutIndex >= 0
+    ? `${isLive ? 'Now playing' : 'Final bout'} \u00b7 ${getKendoPosition(focusBoutIndex, boutsTotal)}`
+    : ''
+
+  return (
+    <main className="scoreboard scoreboard-team">
+      <header className="scoreboard-top">
+        <p className="scoreboard-eyebrow">{tournament.name} &middot; {match.title}</p>
+        <h1>
+          <span className="scoreboard-team-name">{match.left.label}</span>
+          <span className="scoreboard-team-vs"> vs </span>
+          <span className="scoreboard-team-name">{match.right.label}</span>
+        </h1>
+        <p className="scoreboard-code">
+          {match.code}{focusLabel ? ` \u2014 ${focusLabel}` : ''}
+          {focusBoutIndex >= 0 ? (
+            <>
+              {' \u00b7 '}
+              <ScoreboardClock timer={boutTimers[focusBoutIndex]} durationSeconds={durationSeconds} />
+            </>
+          ) : null}
+        </p>
+      </header>
+
+      {focusBout ? (
+        <section className="scoreboard-duel">
+          <div className={`scoreboard-side${focusLeftWon ? ' is-winner' : ''}`}>
+            <span className="scoreboard-score">{fmt(focusBout.left)}</span>
+            <span className="scoreboard-name">{focusLeftPlayer?.name.trim() || 'Open slot'}</span>
+            <span className="scoreboard-subscore">{match.left.label}</span>
+          </div>
+          <div className="scoreboard-divider" aria-hidden="true">VS</div>
+          <div className={`scoreboard-side${focusRightWon ? ' is-winner' : ''}`}>
+            <span className="scoreboard-score">{fmt(focusBout.right)}</span>
+            <span className="scoreboard-name">{focusRightPlayer?.name.trim() || 'Open slot'}</span>
+            <span className="scoreboard-subscore">{match.right.label}</span>
+          </div>
+        </section>
+      ) : null}
+
+      <section className="scoreboard-bottom-strip">
+        <section className="scoreboard-team-tally">
+          <div className={`scoreboard-team-tally-side${winnerId === match.left.entrant.id || stats.teamWinner === 'left' ? ' is-winner' : ''}`}>
+            <span className="scoreboard-team-tally-wins">{stats.leftWins}</span>
+            <span className="scoreboard-team-tally-label">{match.left.label}</span>
+            <span className="scoreboard-team-tally-sub">{fmt(stats.leftTotal)} ippons</span>
+          </div>
+          <span className="scoreboard-team-tally-mid">Team</span>
+          <div className={`scoreboard-team-tally-side${winnerId === match.right.entrant.id || stats.teamWinner === 'right' ? ' is-winner' : ''}`}>
+            <span className="scoreboard-team-tally-wins">{stats.rightWins}</span>
+            <span className="scoreboard-team-tally-label">{match.right.label}</span>
+            <span className="scoreboard-team-tally-sub">{fmt(stats.rightTotal)} ippons</span>
+          </div>
+        </section>
+
+        <section className="scoreboard-bouts">
+          {Array.from({ length: boutsTotal }, (_, i) => {
+            const s = boutScores[i] ?? { left: 0, right: 0 }
+            const leftWon = s.left >= 2 && s.left > s.right
+            const rightWon = s.right >= 2 && s.right > s.left
+            const done = s.left >= 2 || s.right >= 2
+            return (
+              <div key={i} className={`scoreboard-bout-row${i === currentBoutIndex ? ' is-current' : ''}${done ? ' is-done' : ''}`}>
+                <span className="scoreboard-bout-pos">{getKendoPosition(i, boutsTotal)}</span>
+                <span className={`scoreboard-bout-cell${leftWon ? ' is-winner' : ''}`}>
+                  {leftMembers[i]?.name.trim() || 'Open slot'}
+                </span>
+                <span className="scoreboard-bout-cell-score">{fmt(s.left)} &ndash; {fmt(s.right)}</span>
+                <span className={`scoreboard-bout-cell scoreboard-bout-cell-right${rightWon ? ' is-winner' : ''}`}>
+                  {rightMembers[i]?.name.trim() || 'Open slot'}
+                </span>
+              </div>
+            )
+          })}
+        </section>
+      </section>
+
+      {winnerId ? (
+        <p className="scoreboard-victor">
+          Victor &mdash; {winnerId === match.left.entrant.id ? match.left.label : match.right.label}
+        </p>
+      ) : null}
+    </main>
+  )
+}
+
 function App() {
   const [tournaments, setTournaments] = useState<TournamentRecord[]>(() => {
     if (typeof window === 'undefined') {
@@ -1767,6 +2664,24 @@ function App() {
     window.localStorage.setItem(TOURNAMENT_STORAGE_KEY, JSON.stringify(tournaments))
   }, [tournaments])
 
+  // Cross-tab sync: when another tab (e.g. the scoreboard tab) writes to
+  // localStorage, refresh local state so the scoreboard updates live.
+  useEffect(() => {
+    function handleStorage(event: StorageEvent) {
+      if (event.key !== TOURNAMENT_STORAGE_KEY || !event.newValue) return
+      try {
+        const parsed = JSON.parse(event.newValue)
+        if (Array.isArray(parsed)) {
+          setTournaments(parsed as TournamentRecord[])
+        }
+      } catch {
+        // ignore
+      }
+    }
+    window.addEventListener('storage', handleStorage)
+    return () => window.removeEventListener('storage', handleStorage)
+  }, [])
+
   function createTournament(draft: TournamentDraft) {
     const record = createTournamentRecord({
       ...draft,
@@ -1799,9 +2714,9 @@ function App() {
   }
 
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={import.meta.env.BASE_URL}>
       <Routes>
-        <Route path="/" element={<HomePage tournaments={tournaments} />} />
+        <Route path="/" element={<HomePage tournaments={tournaments} onDeleteTournament={deleteTournament} />} />
         <Route
           path="/tournaments/new"
           element={<TournamentWizard onCreateTournament={createTournament} />}
@@ -1815,6 +2730,10 @@ function App() {
               onDeleteTournament={deleteTournament}
             />
           }
+        />
+        <Route
+          path="/tournaments/:tournamentId/match/:matchId/scoreboard"
+          element={<MatchScoreboardPage tournaments={tournaments} />}
         />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

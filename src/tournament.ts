@@ -150,14 +150,15 @@ function buildMatch(
   let isComplete = false
   let isAutoAdvance = false
 
-  if (leftEntrant && !rightEntrant) {
-    winnerSlot = createEntrantSlot(leftEntrant)
-    loserSlot = EMPTY_SLOT
+  // Only auto-advance when the opposing slot is an actual BYE, not a pending placeholder.
+  if (left.isBye && rightEntrant) {
+    winnerSlot = createEntrantSlot(rightEntrant)
+    loserSlot = createByeSlot()
     isComplete = true
     isAutoAdvance = true
-  } else if (rightEntrant && !leftEntrant) {
-    winnerSlot = createEntrantSlot(rightEntrant)
-    loserSlot = EMPTY_SLOT
+  } else if (right.isBye && leftEntrant) {
+    winnerSlot = createEntrantSlot(leftEntrant)
+    loserSlot = createByeSlot()
     isComplete = true
     isAutoAdvance = true
   } else if (leftEntrant && rightEntrant) {
@@ -171,9 +172,10 @@ function buildMatch(
       loserSlot = createEntrantSlot(loserEntrant)
       isComplete = true
     }
-  } else if (onlyEntrant) {
+  } else if (left.isBye && right.isBye && onlyEntrant) {
+    // Both sides are BYEs but somehow one entrant exists — edge case, auto-advance.
     winnerSlot = createEntrantSlot(onlyEntrant)
-    loserSlot = EMPTY_SLOT
+    loserSlot = createByeSlot()
     isComplete = true
     isAutoAdvance = true
   }

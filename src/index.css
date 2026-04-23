@@ -1,3 +1,148 @@
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Shippori+Mincho:wght@500;700;800&family=Manrope:wght@400;500;600;700&display=swap');
+
+:root {
+  /* Washi paper tones */
+  --washi: #f1e7d2;
+  --washi-soft: #f6ecd6;
+  --washi-deep: #e8d9bb;
+  --washi-edge: #d8c39c;
+
+  /* Sumi ink tones */
+  --sumi: #16110d;
+  --sumi-soft: #2a211a;
+  --ink-mid: #4a3a2e;
+  --ink-soft: #74604f;
+  --ink-faint: #a78d75;
+
+  /* Vermillion (shu) — the kendo flag accent */
+  --shu: #c73e1d;
+  --shu-deep: #9b2810;
+  --shu-bright: #e64a26;
+  --shu-pale: rgba(199, 62, 29, 0.1);
+  --shu-faint: rgba(199, 62, 29, 0.045);
+
+  /* Hakama indigo for secondary structure */
+  --indigo: #1f2c4a;
+  --indigo-soft: rgba(31, 44, 74, 0.08);
+
+  /* Lines */
+  --rule: rgba(34, 22, 14, 0.14);
+  --rule-soft: rgba(34, 22, 14, 0.06);
+
+  /* Shadows */
+  --shadow-paper: 0 1px 0 rgba(255, 252, 244, 0.7) inset, 0 18px 40px rgba(58, 36, 18, 0.09);
+  --shadow-deep: 0 28px 60px rgba(20, 12, 6, 0.18);
+
+  /* Type system */
+  --display: 'Cormorant Garamond', 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
+  --body: 'Manrope', 'Avenir Next', 'Helvetica Neue', sans-serif;
+  --kanji: 'Shippori Mincho', 'Hiragino Mincho ProN', 'Yu Mincho', serif;
+
+  /* Legacy aliases — keep older rules working during the redesign */
+  --paper: var(--washi);
+  --paper-soft: var(--washi-soft);
+  --surface: var(--washi-soft);
+  --ink: var(--sumi);
+  --ink-deep: var(--sumi);
+  --muted-strong: var(--ink-soft);
+  --sand-light: var(--washi-deep);
+  --sand-muted: rgba(232, 217, 187, 0.74);
+  --bronze: var(--shu);
+  --lacquer: var(--shu);
+  --lacquer-deep: var(--shu-deep);
+  --indigo-mid: var(--indigo);
+  --indigo-pale: var(--indigo-soft);
+  --indigo-faint: rgba(31, 44, 74, 0.04);
+  --line: var(--rule);
+  --line-strong: var(--rule);
+  --shadow: var(--shadow-paper);
+  --sans: var(--body);
+  --heading: var(--display);
+
+  font: 16px/1.55 var(--body);
+  color: var(--ink-mid);
+  background: var(--washi);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  background-color: var(--washi);
+  background-image:
+    url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.18  0 0 0 0 0.12  0 0 0 0 0.08  0 0 0 0.045 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"),
+    repeating-linear-gradient(
+      90deg,
+      transparent 0,
+      transparent 240px,
+      rgba(80, 50, 24, 0.022) 240px,
+      rgba(80, 50, 24, 0.022) 241px
+    ),
+    radial-gradient(circle at 20% -10%, rgba(255, 248, 232, 0.6), transparent 55%),
+    radial-gradient(circle at 110% 110%, rgba(199, 62, 29, 0.05), transparent 50%),
+    linear-gradient(180deg, #f3e9d3, #ecdfc2 60%, #e6d6b2);
+}
+
+#root {
+  width: min(1440px, calc(100% - 2rem));
+  margin: 0 auto;
+  padding: 1.4rem 0 3rem;
+}
+
+h1,
+h2,
+h3,
+h4,
+strong {
+  color: var(--sumi);
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--display);
+  font-weight: 600;
+  margin: 0;
+  letter-spacing: -0.012em;
+}
+
+h1 {
+  font-size: clamp(3rem, 7vw, 6.2rem);
+  line-height: 0.92;
+  letter-spacing: -0.025em;
+  font-weight: 500;
+}
+
+h2 {
+  font-size: clamp(1.6rem, 2.6vw, 2.4rem);
+  line-height: 1.05;
+}
+
+h3 {
+  font-size: clamp(1.2rem, 1.8vw, 1.5rem);
+}
+
+h4 {
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+p {
+  margin: 0;
+}
+
+::selection {
+  background: var(--shu-pale);
+  color: var(--sumi);
+}
 :root {
   --paper: #ece1cf;
   --paper-soft: #f8efdf;
@@ -11,6 +156,10 @@
   --bronze: #bb8a4b;
   --lacquer: #903d26;
   --lacquer-deep: #6a2517;
+  --indigo: #1e2c4e;
+  --indigo-mid: #263a65;
+  --indigo-pale: rgba(30, 44, 79, 0.1);
+  --indigo-faint: rgba(30, 44, 79, 0.04);
   --line: rgba(96, 62, 40, 0.14);
   --line-strong: rgba(230, 207, 173, 0.18);
   --shadow: 0 26px 80px rgba(41, 25, 18, 0.14);
@@ -33,6 +182,13 @@ body {
   margin: 0;
   min-width: 320px;
   background:
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 160px,
+      rgba(130, 100, 70, 0.022) 160px,
+      rgba(130, 100, 70, 0.022) 161px
+    ),
     linear-gradient(180deg, rgba(255, 255, 255, 0.22), transparent 12%),
     linear-gradient(180deg, #f5ecd9, #ecdfca 38%, #e7d9c5);
 }
