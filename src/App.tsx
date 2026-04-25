@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import {
   BrowserRouter,
   Link,
@@ -156,32 +156,68 @@ function resolveMatchLineup(team: TeamEntry | undefined, savedOrder: string[] | 
   return [...ordered, ...extras]
 }
 
-function computeTeamStats(boutScores: Array<MatchScore | undefined>, boutsTotal: number) {
+function isBoutScoreDecided(score: MatchScore | undefined): boolean {
+  return !!score && (score.left >= 2 || score.right >= 2)
+}
+
+function isTeamBoutComplete(
+  score: MatchScore | undefined,
+  timer: MatchTimerState | undefined,
+  durationSeconds: number,
+): boolean {
+  return isBoutScoreDecided(score) || isTimerExpired(timer, durationSeconds)
+}
+
+function getBoutMatchInfo(key: string): { matchId: string; boutIndex: number } | null {
+  const marker = ':bout:'
+  const markerIndex = key.lastIndexOf(marker)
+  if (markerIndex < 0) return null
+  const matchId = key.slice(0, markerIndex)
+  const boutIndex = Number(key.slice(markerIndex + marker.length))
+  if (!matchId || !Number.isInteger(boutIndex) || boutIndex < 0) return null
+  return { matchId, boutIndex }
+}
+
+function computeTeamStats(
+  boutScores: Array<MatchScore | undefined>,
+  boutsTotal: number,
+  completedBouts?: boolean[],
+) {
   let leftWins = 0
   let rightWins = 0
   let leftTotal = 0
   let rightTotal = 0
   let finishedBouts = 0
 
-  for (const score of boutScores) {
-    if (!score) continue
-    leftTotal += score.left
-    rightTotal += score.right
-    if (score.left >= 2 || score.right >= 2) {
+  for (let index = 0; index < boutsTotal; index += 1) {
+    const score = boutScores[index]
+    const boutFinished = completedBouts?.[index] ?? isBoutScoreDecided(score)
+
+    if (score) {
+      leftTotal += score.left
+      rightTotal += score.right
+    }
+
+    if (boutFinished) {
       finishedBouts++
-      if (score.left > score.right) leftWins++
-      else if (score.right > score.left) rightWins++
+    }
+
+    if (isBoutScoreDecided(score)) {
+      if (score!.left > score!.right) leftWins++
+      else if (score!.right > score!.left) rightWins++
     }
   }
 
   const pendingBouts = Math.max(0, boutsTotal - finishedBouts)
   let teamWinner: 'left' | 'right' | null = null
 
-  if (leftWins > rightWins + pendingBouts) {
+  if (pendingBouts > 0) {
+    teamWinner = null
+  } else if (leftWins > rightWins) {
     teamWinner = 'left'
-  } else if (rightWins > leftWins + pendingBouts) {
+  } else if (rightWins > leftWins) {
     teamWinner = 'right'
-  } else if (pendingBouts === 0 && leftWins === rightWins) {
+  } else if (leftWins === rightWins) {
     // All bouts finished and team score is tied — use ippon tally as tiebreaker
     if (leftTotal > rightTotal) teamWinner = 'left'
     else if (rightTotal > leftTotal) teamWinner = 'right'
@@ -560,7 +596,7 @@ function MatchCard({
   const scoringLocked = match.isComplete || timeExpired
 
   return (
-    <article className={`match-card stage-${match.stage}${isNextBout ? ' is-next-bout' : ''}`}>
+    <article className={`match-card stage-${match.stage}${isNextBout ? ' is-next-bout' : ''}`} data-match-id={match.id}>
       <header className="match-header">
         <div>
           <p className="match-code">{match.code}</p>
@@ -855,16 +891,19 @@ function TeamMatchCard({
   const boutsTotal = Math.min(leftMembers.length, rightMembers.length)
 
   const boutScoresList = Array.from({ length: boutsTotal }, (_, i) => scores[getBoutKey(match.id, i)])
-  const stats = computeTeamStats(boutScoresList, boutsTotal)
+  const boutCompletionList = Array.from({ length: boutsTotal }, (_, i) =>
+    isTeamBoutComplete(boutScoresList[i], timers[getBoutKey(match.id, i)], durationSeconds),
+  )
+  const stats = computeTeamStats(boutScoresList, boutsTotal, boutCompletionList)
   const hasAnyScore = boutScoresList.some((s) => s && (s.left > 0 || s.right > 0))
   const lineupLocked = hasAnyScore || match.isComplete
   const isTiebreaker = stats.leftWins === stats.rightWins && (stats.leftTotal > 0 || stats.rightTotal > 0)
-  const showManualSelect = hasAnyScore && !match.isComplete && match.options.length > 1
+  const showManualSelect = !match.isComplete && stats.pendingBouts === 0 && stats.teamWinner === null && match.options.length > 1
 
   // No members or auto-advance: fall back to click-to-select slot buttons
   if (match.isAutoAdvance || boutsTotal === 0) {
     return (
-      <article className={`match-card stage-${match.stage}${isNextBout ? ' is-next-bout' : ''}`}>
+      <article className={`match-card stage-${match.stage}${isNextBout ? ' is-next-bout' : ''}`} data-match-id={match.id}>
         <header className="match-header">
           <div>
             <p className="match-code">{match.code}</p>
@@ -909,7 +948,7 @@ function TeamMatchCard({
   }
 
   return (
-    <article className={`match-card team-match-card stage-${match.stage}${isNextBout ? ' is-next-bout' : ''}`}>
+    <article className={`match-card team-match-card stage-${match.stage}${isNextBout ? ' is-next-bout' : ''}`} data-match-id={match.id}>
       <header className="match-header">
         <div>
           <p className="match-code">{match.code}</p>
@@ -1019,37 +1058,8 @@ function TeamMatchCard({
             <div key={boutIndex} className={`bout-row${boutTimeExpired && !boutDone ? ' is-time-draw' : ''}`}>
               <span className="bout-pos">{getKendoPosition(boutIndex, boutsTotal)}</span>
 
-              {/* Names + scores row. display:contents in normal so left/right enter the parent grid */}
-              <div className="bout-names-row">
-                <div className={`bout-left bout-score-slot score-slot score-slot-left${leftWonBout ? ' bout-won is-winner' : ''}`}>
-                  <span className="bout-name score-slot-name">{leftMember?.name.trim() || 'Open slot'}</span>
-                  <ScorePlate
-                    score={boutScore.left}
-                    side="left"
-                    canScore={!boutLocked}
-                    onScore={(amount) => onAddBoutScore(match.id, boutIndex, 'left', amount)}
-                    onUndo={() => onUndoBoutScore(match.id, boutIndex, 'left')}
-                  />
-                </div>
-
-                {/* Kanji VS divider — only visible in fullscreen */}
-                <span className="bout-vs-kanji" aria-hidden="true">対</span>
-
-                <div className={`bout-right bout-score-slot score-slot score-slot-right${rightWonBout ? ' bout-won is-winner' : ''}`}>
-                  <span className="bout-name score-slot-name">{rightMember?.name.trim() || 'Open slot'}</span>
-                  <ScorePlate
-                    score={boutScore.right}
-                    side="right"
-                    canScore={!boutLocked}
-                    onScore={(amount) => onAddBoutScore(match.id, boutIndex, 'right', amount)}
-                    onUndo={() => onUndoBoutScore(match.id, boutIndex, 'right')}
-                  />
-                </div>
-              </div>
-
-              {/* Timer — compact center column in normal mode, full-width row in fullscreen */}
+              {/* Timer first, matching the singles card order */}
               <MatchTimer
-                compact
                 timer={boutTimer}
                 durationSeconds={durationSeconds}
                 locked={boutDone}
@@ -1059,6 +1069,32 @@ function TeamMatchCard({
                 onReset={() => onTimerReset(boutKey)}
                 onExpire={() => onTimerExpire(boutKey)}
               />
+
+              <div className="bout-names-row match-scoring-row">
+                <div className={`bout-score-slot score-slot score-slot-left${leftWonBout ? ' is-winner' : ''}`}>
+                  <span className="score-slot-name">{leftMember?.name.trim() || 'Open slot'}</span>
+                  <ScorePlate
+                    score={boutScore.left}
+                    side="left"
+                    canScore={!boutLocked}
+                    onScore={(amount) => onAddBoutScore(match.id, boutIndex, 'left', amount)}
+                    onUndo={() => onUndoBoutScore(match.id, boutIndex, 'left')}
+                  />
+                </div>
+
+                <span className="match-vs-kanji" aria-hidden="true">対</span>
+
+                <div className={`bout-score-slot score-slot score-slot-right${rightWonBout ? ' is-winner' : ''}`}>
+                  <span className="score-slot-name">{rightMember?.name.trim() || 'Open slot'}</span>
+                  <ScorePlate
+                    score={boutScore.right}
+                    side="right"
+                    canScore={!boutLocked}
+                    onScore={(amount) => onAddBoutScore(match.id, boutIndex, 'right', amount)}
+                    onUndo={() => onUndoBoutScore(match.id, boutIndex, 'right')}
+                  />
+                </div>
+              </div>
             </div>
           )
         })}
@@ -1820,6 +1856,7 @@ function TournamentWorkbench({
   const teamScoringTeams = tournament.kind === 'team' ? tournament.teams : undefined
   const teamLineups = tournament.kind === 'team' ? (tournament.lineups ?? {}) : undefined
   const hasStarted = hasTournamentStarted(tournament)
+  const previousNextMatchIdRef = useRef<string | null | undefined>(undefined)
 
   function handleAddScore(matchId: string, side: ScoreSide, amount: ScoreAwardAmount) {
     onChange((current) => {
@@ -1967,7 +2004,11 @@ function TournamentWorkbench({
       const rightTeam = current.teams.find((t) => t.id === match.right.entrant?.id)
       const boutsTotal = Math.min(leftTeam?.members.length ?? 0, rightTeam?.members.length ?? 0)
       const boutScoresList = Array.from({ length: boutsTotal }, (_, i) => nextScores[getBoutKey(matchId, i)])
-      const stats = computeTeamStats(boutScoresList, boutsTotal)
+      const matchDurationSeconds = current.matchDurationSeconds ?? DEFAULT_MATCH_DURATION_SECONDS
+      const boutCompletionList = Array.from({ length: boutsTotal }, (_, i) =>
+        isTeamBoutComplete(boutScoresList[i], nextTimers[getBoutKey(matchId, i)], matchDurationSeconds),
+      )
+      const stats = computeTeamStats(boutScoresList, boutsTotal, boutCompletionList)
 
       let nextResults = current.results
       if (stats.teamWinner !== null) {
@@ -2021,7 +2062,11 @@ function TournamentWorkbench({
       const rightTeam = current.teams.find((t) => t.id === match.right.entrant?.id)
       const boutsTotal = Math.min(leftTeam?.members.length ?? 0, rightTeam?.members.length ?? 0)
       const boutScoresList = Array.from({ length: boutsTotal }, (_, i) => nextScores[getBoutKey(matchId, i)])
-      const stats = computeTeamStats(boutScoresList, boutsTotal)
+      const matchDurationSeconds = current.matchDurationSeconds ?? DEFAULT_MATCH_DURATION_SECONDS
+      const boutCompletionList = Array.from({ length: boutsTotal }, (_, i) =>
+        isTeamBoutComplete(boutScoresList[i], nextTimers[getBoutKey(matchId, i)], matchDurationSeconds),
+      )
+      const stats = computeTeamStats(boutScoresList, boutsTotal, boutCompletionList)
 
       let nextResults = current.results
       if (stats.teamWinner !== null) {
@@ -2153,12 +2198,54 @@ function TournamentWorkbench({
     onChange((current) => {
       const existing = current.timers?.[key]
       if (existing && existing.runningSince == null && existing.remainingMs <= 0) return current
+
+      let nextTimers = {
+        ...(current.timers ?? {}),
+        [key]: { remainingMs: 0, runningSince: null },
+      }
+      let nextResults = current.results
+      const boutMatchInfo = getBoutMatchInfo(key)
+
+      if (current.kind === 'team' && boutMatchInfo) {
+        const { matchId } = boutMatchInfo
+        const currentEntrants = toTournamentEntrants(current.kind, current.singles, current.teams)
+        const currentBracket = currentEntrants.length >= 2
+          ? buildTournamentBracket(currentEntrants, current.format, current.results)
+          : null
+        const allMatches = currentBracket
+          ? [...currentBracket.winnersRounds, ...currentBracket.losersRounds, ...currentBracket.finalRounds]
+              .flatMap((r) => r.matches)
+          : []
+        const match = allMatches.find((m) => m.id === matchId)
+
+        if (match && !match.isAutoAdvance) {
+          const leftTeam = current.teams.find((t) => t.id === match.left.entrant?.id)
+          const rightTeam = current.teams.find((t) => t.id === match.right.entrant?.id)
+          const boutsTotal = Math.min(leftTeam?.members.length ?? 0, rightTeam?.members.length ?? 0)
+          const boutScoresList = Array.from({ length: boutsTotal }, (_, i) => (current.scores ?? {})[getBoutKey(matchId, i)])
+          const matchDurationSeconds = current.matchDurationSeconds ?? DEFAULT_MATCH_DURATION_SECONDS
+          const boutCompletionList = Array.from({ length: boutsTotal }, (_, i) =>
+            isTeamBoutComplete(boutScoresList[i], nextTimers[getBoutKey(matchId, i)], matchDurationSeconds),
+          )
+          const stats = computeTeamStats(boutScoresList, boutsTotal, boutCompletionList)
+
+          if (stats.teamWinner !== null) {
+            const winnerEntrant = stats.teamWinner === 'left' ? match.left.entrant : match.right.entrant
+            if (winnerEntrant) {
+              nextResults = { ...current.results, [matchId]: winnerEntrant.id }
+              nextTimers = stopMatchTimers(nextTimers, matchId)
+            }
+          } else if (current.results[matchId]) {
+            nextResults = { ...current.results }
+            delete nextResults[matchId]
+          }
+        }
+      }
+
       return {
         ...current,
-        timers: {
-          ...(current.timers ?? {}),
-          [key]: { remainingMs: 0, runningSince: null },
-        },
+        results: nextResults,
+        timers: nextTimers,
         updatedAt: new Date().toISOString(),
       }
     })
@@ -2236,9 +2323,64 @@ function TournamentWorkbench({
     }
   }, [bracketFullscreen])
 
+  useEffect(() => {
+    const nextMatchId = nextPendingMatch?.id ?? null
+    const previousNextMatchId = previousNextMatchIdRef.current
+    previousNextMatchIdRef.current = nextMatchId
+
+    if (previousNextMatchId === undefined || previousNextMatchId === nextMatchId || !nextMatchId || !hasStarted) {
+      return
+    }
+
+    window.requestAnimationFrame(() => {
+      const nextMatchCard = document.querySelector<HTMLElement>('.match-card.is-next-bout')
+      if (!nextMatchCard) return
+      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      const behavior: ScrollBehavior = prefersReducedMotion ? 'auto' : 'smooth'
+      const fullscreenPanel = nextMatchCard.closest<HTMLElement>('.bracket-panel.is-fullscreen')
+
+      if (fullscreenPanel) {
+        const panelRect = fullscreenPanel.getBoundingClientRect()
+        const cardRect = nextMatchCard.getBoundingClientRect()
+        const heading = fullscreenPanel.querySelector<HTMLElement>('.bracket-heading')
+        const headingOffset = (heading?.getBoundingClientRect().height ?? 0) + 24
+        fullscreenPanel.scrollTo({
+          top: Math.max(0, fullscreenPanel.scrollTop + cardRect.top - panelRect.top - headingOffset),
+          behavior,
+        })
+        return
+      }
+
+      const stickyHeader = document.querySelector<HTMLElement>('.workbench-header')
+      const headerOffset = (stickyHeader?.getBoundingClientRect().height ?? 0) + 24
+      const cardRect = nextMatchCard.getBoundingClientRect()
+      window.scrollTo({
+        top: Math.max(0, window.scrollY + cardRect.top - headerOffset),
+        behavior,
+      })
+    })
+  }, [hasStarted, nextPendingMatch?.id])
+
   return (
     <>
       <header className="workbench-header">
+        <Link
+          to="/"
+          className="workbench-back-btn"
+          title="Back to tournaments"
+          aria-label="Back to tournaments"
+        >
+          <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+            <path
+              d="M9.8 3.2 5 8l4.8 4.8"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </Link>
         <div className="workbench-title-block">
           <p className="workbench-eyebrow">
             {tournament.kind === 'single' ? 'Individual bracket' : 'Team shiai'}
@@ -2611,11 +2753,8 @@ function TournamentDetailPage({
   return (
     <AppFrame
       action={
-        <div className="topbar-action-row">
-          <Link to="/" className="inline-link">
-            Back to tournaments
-          </Link>
-          {!hasStarted && (
+        !hasStarted ? (
+          <div className="topbar-action-row">
             <button
               type="button"
               className="ghost-button"
@@ -2628,8 +2767,8 @@ function TournamentDetailPage({
             >
               Delete tournament
             </button>
-          )}
-        </div>
+          </div>
+        ) : undefined
       }
     >
       <TournamentWorkbench
@@ -2735,11 +2874,14 @@ function MatchScoreboardPage({ tournaments }: { tournaments: TournamentRecord[] 
   const rightMembers = resolveMatchLineup(rightTeam, lineup?.right)
   const boutsTotal = Math.min(leftMembers.length, rightMembers.length)
   const boutScores = Array.from({ length: boutsTotal }, (_, i) => tournament.scores?.[getBoutKey(match.id, i)])
-  const stats = computeTeamStats(boutScores, boutsTotal)
-  const winnerId = tournament.results?.[match.id]
-  const fmt = (n: number) => (n % 1 === 0 ? String(n) : n.toFixed(1))
   const durationSeconds = tournament.matchDurationSeconds ?? DEFAULT_MATCH_DURATION_SECONDS
   const boutTimers = Array.from({ length: boutsTotal }, (_, i) => tournament.timers?.[getBoutKey(match.id, i)])
+  const boutCompletionList = Array.from({ length: boutsTotal }, (_, i) =>
+    isTeamBoutComplete(boutScores[i], boutTimers[i], durationSeconds),
+  )
+  const stats = computeTeamStats(boutScores, boutsTotal, boutCompletionList)
+  const winnerId = tournament.results?.[match.id]
+  const fmt = (n: number) => (n % 1 === 0 ? String(n) : n.toFixed(1))
   // A bout is "done" if a winner is decided OR the timer has expired (drawn).
   const currentBoutIndex = boutScores.findIndex((s, i) => {
     const decided = s && (s.left >= 2 || s.right >= 2)
@@ -2817,7 +2959,7 @@ function MatchScoreboardPage({ tournaments }: { tournaments: TournamentRecord[] 
             const s = boutScores[i] ?? { left: 0, right: 0 }
             const leftWon = s.left >= 2 && s.left > s.right
             const rightWon = s.right >= 2 && s.right > s.left
-            const done = s.left >= 2 || s.right >= 2
+            const done = isTeamBoutComplete(s, boutTimers[i], durationSeconds)
             return (
               <div key={i} className={`scoreboard-bout-row${i === currentBoutIndex ? ' is-current' : ''}${done ? ' is-done' : ''}`}>
                 <span className="scoreboard-bout-pos">{getKendoPosition(i, boutsTotal)}</span>
