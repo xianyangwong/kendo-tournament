@@ -83,6 +83,41 @@ function getMatchStageKanji(stage: BracketMatch['stage']): string {
   }
 }
 
+function getMatchStateMeta(match: BracketMatch, isProgressing: boolean) {
+  if (match.isComplete) {
+    return {
+      className: 'is-complete',
+      label: match.isAutoAdvance ? 'Auto-advanced' : 'Locked in',
+    }
+  }
+
+  if (isProgressing) {
+    return {
+      className: 'is-progressing',
+      label: 'Progressing',
+    }
+  }
+
+  return {
+    className: 'is-pending',
+    label: 'Pending',
+  }
+}
+
+function scrollToNextBoutCard() {
+  const nextMatchCard = document.querySelector<HTMLElement>('.match-card.is-next-bout')
+  if (!nextMatchCard) return
+  const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  const behavior: ScrollBehavior = prefersReducedMotion ? 'auto' : 'smooth'
+  const stickyStack = document.querySelector<HTMLElement>('.workbench-sticky-stack')
+  const headerOffset = (stickyStack?.getBoundingClientRect().height ?? 0) + 24
+  const cardRect = nextMatchCard.getBoundingClientRect()
+  window.scrollTo({
+    top: Math.max(0, window.scrollY + cardRect.top - headerOffset),
+    behavior,
+  })
+}
+
 function getBoutKey(matchId: string, boutIndex: number): string {
   return `${matchId}:bout:${boutIndex}`
 }
@@ -246,6 +281,61 @@ function computeTeamStats(
   }
 
   return { leftWins, rightWins, leftTotal, rightTotal, finishedBouts, pendingBouts, teamWinner }
+}
+
+function getNextBoutStripInfo(tournament: TournamentRecord, match: BracketMatch) {
+  if (tournament.kind !== 'team') {
+    return {
+      left: match.left.label,
+      right: match.right.label,
+      position: null as string | null,
+      detail: null as string | null,
+    }
+  }
+
+  const leftTeam = tournament.teams.find((team) => team.id === match.left.entrant?.id)
+  const rightTeam = tournament.teams.find((team) => team.id === match.right.entrant?.id)
+  const lineup = tournament.lineups?.[match.id]
+  const leftMembers = resolveMatchLineup(leftTeam, lineup?.left)
+  const rightMembers = resolveMatchLineup(rightTeam, lineup?.right)
+  const boutsTotal = Math.min(leftMembers.length, rightMembers.length)
+
+  if (boutsTotal === 0) {
+    return {
+      left: match.left.label,
+      right: match.right.label,
+      position: null,
+      detail: null,
+    }
+  }
+
+  const durationSeconds = tournament.matchDurationSeconds ?? DEFAULT_MATCH_DURATION_SECONDS
+  const nextBoutIndex = Array.from({ length: boutsTotal }, (_, index) => index).find((index) => {
+    const boutKey = getBoutKey(match.id, index)
+    return !isTeamBoutComplete(tournament.scores?.[boutKey], tournament.timers?.[boutKey], durationSeconds)
+  })
+
+  if (nextBoutIndex == null) {
+    return {
+      left: match.left.label,
+      right: match.right.label,
+      position: '判定',
+      detail: 'Declare match winner',
+    }
+  }
+
+  return {
+    left: leftMembers[nextBoutIndex]?.name.trim() || 'Open slot',
+    right: rightMembers[nextBoutIndex]?.name.trim() || 'Open slot',
+    position: getKendoPosition(nextBoutIndex, boutsTotal),
+    detail: `${match.left.label} 対 ${match.right.label}`,
+  }
+}
+
+function getTournamentMatchPairing(tournament: TournamentRecord, match: BracketMatch): string {
+  const info = getNextBoutStripInfo(tournament, match)
+  const position = info.position ? `${info.position} ` : ''
+  return `${position}${info.left} 対 ${info.right}`
 }
 
 function ScoreboardClock({
@@ -615,6 +705,7 @@ function MatchCard({
   const hasScore = matchScore && (matchScore.left > 0 || matchScore.right > 0)
   const timeExpired = isTimerExpired(timer, durationSeconds)
   const scoringLocked = match.isComplete || timeExpired
+  const matchState = getMatchStateMeta(match, !!hasScore || !!timer)
 
   return (
     <article
@@ -632,8 +723,8 @@ function MatchCard({
         </div>
         <div className="match-header-actions">
           {isNextBout ? <span className="next-bout-cue">Next bout</span> : null}
-          <span className={`match-state ${match.isComplete ? 'is-complete' : 'is-pending'}`}>
-            {match.isComplete ? (match.isAutoAdvance ? 'Auto-advanced' : 'Locked in') : 'Pending'}
+          <span className={`match-state ${matchState.className}`}>
+            {matchState.label}
           </span>
           {tournamentId && !match.isAutoAdvance && match.left.entrant && match.right.entrant ? (
             <a
@@ -924,9 +1015,11 @@ function TeamMatchCard({
   )
   const stats = computeTeamStats(boutScoresList, boutsTotal, boutCompletionList)
   const hasAnyScore = boutScoresList.some((s) => s && (s.left > 0 || s.right > 0))
+  const hasAnyTimer = Array.from({ length: boutsTotal }, (_, i) => timers[getBoutKey(match.id, i)]).some(Boolean)
   const lineupLocked = hasAnyScore || match.isComplete
   const isTiebreaker = stats.leftWins === stats.rightWins && (stats.leftTotal > 0 || stats.rightTotal > 0)
   const showManualSelect = !match.isComplete && stats.pendingBouts === 0 && stats.teamWinner === null && match.options.length > 1
+  const matchState = getMatchStateMeta(match, hasAnyScore || hasAnyTimer)
 
   // No members or auto-advance: fall back to click-to-select slot buttons
   if (match.isAutoAdvance || boutsTotal === 0) {
@@ -946,8 +1039,8 @@ function TeamMatchCard({
           </div>
           <div className="match-header-actions">
             {isNextBout ? <span className="next-bout-cue">Next bout</span> : null}
-            <span className={`match-state ${match.isComplete ? 'is-complete' : 'is-pending'}`}>
-              {match.isComplete ? (match.isAutoAdvance ? 'Auto-advanced' : 'Locked in') : 'Pending'}
+            <span className={`match-state ${matchState.className}`}>
+              {matchState.label}
             </span>
           </div>
         </header>
@@ -998,8 +1091,8 @@ function TeamMatchCard({
         </div>
         <div className="match-header-actions">
           {isNextBout ? <span className="next-bout-cue">Next bout</span> : null}
-          <span className={`match-state ${match.isComplete ? 'is-complete' : 'is-pending'}`}>
-            {match.isComplete ? 'Locked in' : 'Pending'}
+          <span className={`match-state ${matchState.className}`}>
+            {matchState.label}
           </span>
           {tournamentId && match.left.entrant && match.right.entrant ? (
             <a
@@ -1213,6 +1306,7 @@ function getTournamentInsight(tournament: TournamentRecord) {
       progress: 0,
       champion: null as string | null,
       nextMatch: null as string | null,
+      nextMatchPairing: null as string | null,
       isComplete: false,
     }
   }
@@ -1232,16 +1326,37 @@ function getTournamentInsight(tournament: TournamentRecord) {
         : 0,
     champion: bracket.champion?.label ?? null,
     nextMatch: nextPendingMatch?.code ?? null,
+    nextMatchPairing: nextPendingMatch ? getTournamentMatchPairing(tournament, nextPendingMatch) : null,
     isComplete: bracket.champion !== null,
   }
 }
 
-function formatDate(dateString: string) {
+function sortByUpdatedDesc<T extends { updatedAt: string }>(items: T[]): T[] {
+  return [...items].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+}
+
+function formatUpdatedAt(dateString: string) {
+  const date = new Date(dateString)
+  if (Number.isNaN(date.getTime())) return 'Unknown'
+
+  const now = new Date()
+  const diffMs = now.getTime() - date.getTime()
+  if (diffMs >= 0 && diffMs < 60_000) return 'Just now'
+  if (diffMs >= 0 && diffMs < 60 * 60_000) {
+    const minutes = Math.max(1, Math.floor(diffMs / 60_000))
+    return `${minutes} min ago`
+  }
+  if (diffMs >= 0 && diffMs < 24 * 60 * 60_000) {
+    const hours = Math.max(1, Math.floor(diffMs / (60 * 60_000)))
+    return `${hours} hr ago`
+  }
+
   return new Intl.DateTimeFormat('en', {
     month: 'short',
     day: 'numeric',
-    year: 'numeric',
-  }).format(new Date(dateString))
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(date)
 }
 
 type TournamentStatus = 'active' | 'upcoming' | 'past'
@@ -1322,9 +1437,13 @@ function TournamentCard({
   const status = getTournamentStatus(tournament)
   const statusChip = status === 'past' ? 'Past' : status === 'active' ? 'Active' : 'Upcoming'
   const statusClass = status === 'past' ? 'is-complete' : status === 'active' ? 'is-live' : 'is-upcoming'
+  const focusLabel = insight.isComplete ? 'Champion' : status === 'active' ? 'Next bout' : 'First bout'
+  const focusValue = insight.isComplete ? insight.champion ?? 'Undecided' : insight.nextMatchPairing ?? 'TBD'
+  const focusCode = !insight.isComplete ? insight.nextMatch : null
+  const actionLabel = status === 'active' ? 'Continue' : status === 'past' ? 'Review' : 'Open'
 
   return (
-    <article className={`tournament-card tournament-card--${tournament.kind}`}>
+    <article className={`tournament-card tournament-card--${tournament.kind} tournament-card-status-${status}`}>
       <div className="tournament-card-header">
         <div>
           <span className="tournament-type-badge">
@@ -1337,34 +1456,27 @@ function TournamentCard({
         </span>
       </div>
 
-      <div className="tournament-meta-grid">
-        <div>
-          <span>Format</span>
-          <strong>
-            {tournament.format === 'single' ? 'Single knockout' : 'Double knockout'}
-          </strong>
-        </div>
-        <div>
-          <span>Entrants</span>
-          <strong>{insight.entrants}</strong>
-        </div>
-        <div>
-          <span>Progress</span>
-          <strong>{insight.progress}%</strong>
-        </div>
-        <div>
-          <span>{insight.isComplete ? 'Champion' : 'Next bout'}</span>
-          <strong>{insight.isComplete ? insight.champion : insight.nextMatch ?? 'TBD'}</strong>
-        </div>
+      <div className="tournament-card-focus">
+        <span>{focusLabel}</span>
+        {focusCode ? <em className="tournament-card-focus-code">{focusCode}</em> : null}
+        <strong>{focusValue}</strong>
+      </div>
+
+      <div className="tournament-card-ledger" aria-label="Tournament details">
+        <span>{tournament.format === 'single' ? 'Single knockout' : 'Double knockout'}</span>
+        <span>{insight.entrants} entrants</span>
+        <span>{insight.progress}% complete</span>
       </div>
 
       <footer className="tournament-card-footer">
-        <span>Updated {formatDate(tournament.updatedAt)}</span>
+        <span>Updated {formatUpdatedAt(tournament.updatedAt)}</span>
         <div className="tournament-card-actions">
           {onDelete && (
             <button
               type="button"
               className="tournament-card-delete"
+              title="Delete tournament"
+              aria-label={`Delete ${tournament.name}`}
               onClick={(event) => {
                 event.preventDefault()
                 if (window.confirm(`Delete "${tournament.name}" from local storage?`)) {
@@ -1372,11 +1484,20 @@ function TournamentCard({
                 }
               }}
             >
-              Delete
+              <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                <path
+                  d="M3.2 4.4h9.6M6.4 4.4V3.2h3.2v1.2M5 6.4l.45 6.2h5.1L11 6.4"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.45"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
             </button>
           )}
-          <Link to={`/tournaments/${tournament.id}`} className="inline-link">
-            Open tournament
+          <Link to={`/tournaments/${tournament.id}`} className={`tournament-card-primary is-${status}`}>
+            {actionLabel}
           </Link>
         </div>
       </footer>
@@ -1391,9 +1512,9 @@ function HomePage({
   tournaments: TournamentRecord[]
   onDeleteTournament: (id: string) => void
 }) {
-  const activeTournaments = tournaments.filter((t) => getTournamentStatus(t) === 'active')
+  const activeTournaments = sortByUpdatedDesc(tournaments.filter((t) => getTournamentStatus(t) === 'active'))
   const upcomingTournaments = tournaments.filter((t) => getTournamentStatus(t) === 'upcoming')
-  const pastTournaments = tournaments.filter((t) => getTournamentStatus(t) === 'past')
+  const pastTournaments = sortByUpdatedDesc(tournaments.filter((t) => getTournamentStatus(t) === 'past'))
 
   const [tab, setTab] = useState<TournamentStatus>(() => {
     if (activeTournaments.length) return 'active'
@@ -1404,13 +1525,12 @@ function HomePage({
 
   const tabs: { key: TournamentStatus; label: string; count: number }[] = [
     { key: 'active', label: 'Active', count: activeTournaments.length },
-    { key: 'upcoming', label: 'Upcoming', count: upcomingTournaments.length },
-    { key: 'past', label: 'Past', count: pastTournaments.length },
+    { key: 'upcoming', label: 'Queued', count: upcomingTournaments.length },
+    { key: 'past', label: 'Archived', count: pastTournaments.length },
   ]
 
   const currentList =
     tab === 'active' ? activeTournaments : tab === 'upcoming' ? upcomingTournaments : pastTournaments
-  const canDelete = tab !== 'active'
   const emptyCopy =
     tab === 'active'
       ? { h: 'No active tournaments', p: 'Tournaments appear here once the first bout is scored.' }
@@ -1428,51 +1548,39 @@ function HomePage({
     >
       <section className="home-header">
         <div>
-          <p className="eyebrow">Local event book</p>
+          <p className="eyebrow">Tournament register</p>
           <h1>Tournament desk</h1>
         </div>
         <span className="home-header-count">{tournaments.length} saved</span>
       </section>
 
-      <section className="home-command-strip" aria-label="Tournament overview">
-        <div>
-          <span>Active</span>
-          <strong>{activeTournaments.length}</strong>
-        </div>
-        <div>
-          <span>Queued</span>
-          <strong>{upcomingTournaments.length}</strong>
-        </div>
-        <div>
-          <span>Archived</span>
-          <strong>{pastTournaments.length}</strong>
-        </div>
+      <section className="home-status-nav" role="tablist" aria-label="Tournament status">
+        {tabs.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            role="tab"
+            aria-selected={tab === t.key}
+            className={`home-status-tile${tab === t.key ? ' is-active' : ''}`}
+            onClick={() => setTab(t.key)}
+          >
+            <span>{t.label}</span>
+            <strong>{t.count}</strong>
+            <em>
+              {t.key === 'active' ? 'In progress' : t.key === 'upcoming' ? 'Ready to begin' : 'Finished'}
+            </em>
+          </button>
+        ))}
       </section>
 
       <section className="list-section">
-        <div className="tournament-tabs" role="tablist">
-          {tabs.map((t) => (
-            <button
-              key={t.key}
-              type="button"
-              role="tab"
-              aria-selected={tab === t.key}
-              className={`tournament-tab${tab === t.key ? ' is-active' : ''}`}
-              onClick={() => setTab(t.key)}
-            >
-              <span>{t.label}</span>
-              <em>{t.count}</em>
-            </button>
-          ))}
-        </div>
-
         {currentList.length > 0 ? (
           <div className="tournament-grid">
             {currentList.map((tournament) => (
               <TournamentCard
                 key={tournament.id}
                 tournament={tournament}
-                onDelete={canDelete ? onDeleteTournament : undefined}
+                onDelete={onDeleteTournament}
               />
             ))}
           </div>
@@ -2342,6 +2450,11 @@ function TournamentWorkbench({
   })()
 
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const nextBoutScoreboardHref =
+    nextPendingMatch?.left.entrant && nextPendingMatch.right.entrant
+      ? `${import.meta.env.BASE_URL}tournaments/${tournament.id}/match/${nextPendingMatch.id}/scoreboard`
+      : null
+  const nextBoutStripInfo = nextPendingMatch ? getNextBoutStripInfo(tournament, nextPendingMatch) : null
 
   useEffect(() => {
     if (!settingsOpen) return
@@ -2362,109 +2475,155 @@ function TournamentWorkbench({
     }
 
     window.requestAnimationFrame(() => {
-      const nextMatchCard = document.querySelector<HTMLElement>('.match-card.is-next-bout')
-      if (!nextMatchCard) return
-      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-      const behavior: ScrollBehavior = prefersReducedMotion ? 'auto' : 'smooth'
-      const stickyHeader = document.querySelector<HTMLElement>('.workbench-header')
-      const headerOffset = (stickyHeader?.getBoundingClientRect().height ?? 0) + 24
-      const cardRect = nextMatchCard.getBoundingClientRect()
-      window.scrollTo({
-        top: Math.max(0, window.scrollY + cardRect.top - headerOffset),
-        behavior,
-      })
+      scrollToNextBoutCard()
     })
   }, [hasStarted, nextPendingMatch?.id])
 
   return (
     <>
-      <header className="workbench-header">
-        <Link
-          to="/"
-          className="workbench-back-btn"
-          title="Back to tournaments"
-          aria-label="Back to tournaments"
-        >
-          <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-            <path
-              d="M9.8 3.2 5 8l4.8 4.8"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        </Link>
-        <div className="workbench-title-block">
-          <p className="workbench-eyebrow">
-            <span className="kanji-kicker">{getTournamentKindKanji(tournament.kind)}</span>
-            {tournament.kind === 'single' ? 'Individual bracket' : 'Team shiai'}
-            {' · '}
-            <span className="kanji-kicker">{getTournamentFormatKanji(tournament.format)}</span>
-            {tournament.format === 'single' ? 'Single knockout' : 'Double knockout'}
-          </p>
-          <h1>{tournament.name}</h1>
-        </div>
-        <div className="workbench-header-right">
-          <div className="workbench-status" data-status-kanji={bracket?.champion ? '優勝' : '次戦'}>
-            <span className="status-label">{bracket?.champion ? 'Champion' : 'Next bout'}</span>
-            <strong className="status-value">
-              {bracket?.champion?.label ?? nextPendingMatch?.code ?? '—'}
-            </strong>
+      <div className="workbench-sticky-stack">
+        <header className="workbench-header">
+          <Link
+            to="/"
+            className="workbench-back-btn"
+            title="Back to tournaments"
+            aria-label="Back to tournaments"
+          >
+            <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+              <path
+                d="M9.8 3.2 5 8l4.8 4.8"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </Link>
+          <div className="workbench-title-block">
+            <p className="workbench-eyebrow">
+              <span className="kanji-kicker">{getTournamentKindKanji(tournament.kind)}</span>
+              {tournament.kind === 'single' ? 'Individual bracket' : 'Team shiai'}
+              {' · '}
+              <span className="kanji-kicker">{getTournamentFormatKanji(tournament.format)}</span>
+              {tournament.format === 'single' ? 'Single knockout' : 'Double knockout'}
+            </p>
+            <h1>{tournament.name}</h1>
           </div>
-          <div className="workbench-controls">
-            <button
-              type="button"
-              className="reset-bracket-btn"
-              onClick={handleResetBracket}
-              disabled={!hasStarted}
-              title="Reset bracket"
-              aria-label="Reset bracket"
+          <div className="workbench-header-right">
+            <div
+              className="workbench-status"
+              data-status-kanji={bracket?.champion ? '優勝' : '次戦'}
+              hidden={!!nextPendingMatch && !bracket?.champion}
             >
-              <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-                <path
-                  d="M3.2 8a4.8 4.8 0 1 0 1.45-3.43"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.6"
-                  strokeLinecap="round"
-                />
-                <path d="M2 2.6v3.6h3.6" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </button>
-            {onDelete ? (
+              <span className="status-label">{bracket?.champion ? 'Champion' : 'Next bout'}</span>
+              <strong className="status-value">
+                {bracket?.champion?.label ?? nextPendingMatch?.code ?? '—'}
+              </strong>
+            </div>
+            <div className="workbench-controls">
               <button
                 type="button"
-                className="delete-tournament-btn"
-                onClick={onDelete}
-                title="Delete tournament"
-                aria-label="Delete tournament"
+                className="reset-bracket-btn"
+                onClick={handleResetBracket}
+                disabled={!hasStarted}
+                title="Reset bracket"
+                aria-label="Reset bracket"
               >
                 <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
                   <path
-                    d="M3.2 4.4h9.6M6.4 4.4V3.2h3.2v1.2M5 6.4l.45 6.2h5.1L11 6.4"
+                    d="M3.2 8a4.8 4.8 0 1 0 1.45-3.43"
                     fill="none"
                     stroke="currentColor"
-                    strokeWidth="1.45"
+                    strokeWidth="1.6"
                     strokeLinecap="round"
-                    strokeLinejoin="round"
                   />
+                  <path d="M2 2.6v3.6h3.6" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </button>
-            ) : null}
-            <button
-              type="button"
-              className="settings-icon-btn"
-              onClick={() => setSettingsOpen(true)}
-              title="Tournament settings"
-              aria-label="Open tournament settings"
-            >
-              ⚙
-            </button>
+              {onDelete ? (
+                <button
+                  type="button"
+                  className="delete-tournament-btn"
+                  onClick={onDelete}
+                  title="Delete tournament"
+                  aria-label="Delete tournament"
+                >
+                  <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                    <path
+                      d="M3.2 4.4h9.6M6.4 4.4V3.2h3.2v1.2M5 6.4l.45 6.2h5.1L11 6.4"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.45"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className="settings-icon-btn"
+                onClick={() => setSettingsOpen(true)}
+                title="Tournament settings"
+                aria-label="Open tournament settings"
+              >
+                ⚙
+              </button>
+            </div>
           </div>
-        </div>
-      </header>
+        </header>
+
+        {nextPendingMatch && nextBoutStripInfo && !bracket?.champion ? (
+          <section className="next-bout-strip" aria-label="Next bout">
+            <div className="next-bout-strip-kanji" aria-hidden="true">次戦</div>
+            <div className="next-bout-strip-main">
+              <strong>{nextPendingMatch.code}</strong>
+              <span className="next-bout-strip-names">
+                {nextBoutStripInfo.position ? (
+                  <em className="next-bout-strip-position">{nextBoutStripInfo.position}</em>
+                ) : null}
+                {nextBoutStripInfo.left}
+                <span className="next-bout-strip-divider" aria-hidden="true">対</span>
+                {nextBoutStripInfo.right}
+              </span>
+              {nextBoutStripInfo.detail ? (
+                <span className="next-bout-strip-detail">{nextBoutStripInfo.detail}</span>
+              ) : null}
+            </div>
+            <div className="next-bout-strip-actions">
+              <button
+                type="button"
+                className="next-bout-strip-btn"
+                onClick={scrollToNextBoutCard}
+                title="Jump to next bout"
+                aria-label="Jump to next bout"
+              >
+                <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                  <path d="M8 3.2v8.9" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+                  <path d="M4.7 8.9 8 12.2l3.3-3.3" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+              {nextBoutScoreboardHref ? (
+                <a
+                  className="next-bout-strip-btn"
+                  href={nextBoutScoreboardHref}
+                  target="_blank"
+                  rel="noreferrer"
+                  title="Open scoreboard"
+                  aria-label="Open scoreboard"
+                >
+                  <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                    <path d="M5.2 4.2H3.4v8.4h8.4v-1.8" fill="none" stroke="currentColor" strokeWidth="1.55" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M8.1 3.4h4.5v4.5" fill="none" stroke="currentColor" strokeWidth="1.55" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="m7.4 8.6 5-5" fill="none" stroke="currentColor" strokeWidth="1.55" strokeLinecap="round" />
+                  </svg>
+                </a>
+              ) : null}
+            </div>
+          </section>
+        ) : null}
+      </div>
 
       {/* Settings drawer */}
       {settingsOpen ? (
@@ -2776,7 +2935,6 @@ function TournamentDetailPage({
     )
   }
 
-  const hasStarted = hasTournamentStarted(tournament)
   const handleDeleteTournament = () => {
     if (window.confirm('Delete this tournament from local storage?')) {
       onDeleteTournament(tournament.id)
@@ -2789,7 +2947,7 @@ function TournamentDetailPage({
       <TournamentWorkbench
         tournament={tournament}
         onChange={(updater) => onUpdateTournament(tournament.id, updater)}
-        onDelete={!hasStarted ? handleDeleteTournament : undefined}
+        onDelete={handleDeleteTournament}
       />
     </AppFrame>
   )
