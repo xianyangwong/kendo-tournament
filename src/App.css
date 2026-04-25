@@ -3554,6 +3554,25 @@ input:focus {
   color: var(--ink-soft);
 }
 
+.kanji-kicker {
+  font-family: var(--kanji);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: none;
+  color: var(--shu-deep);
+}
+
+.workbench-eyebrow .kanji-kicker {
+  display: inline-block;
+  margin-right: 0.45rem;
+  font-size: 0.88rem;
+  line-height: 1;
+}
+
+.workbench-eyebrow .kanji-kicker:not(:first-child) {
+  margin-left: 0.65rem;
+}
+
 .workbench-header h1 {
   font-style: normal;
   font-weight: 800;
@@ -3573,11 +3592,31 @@ input:focus {
 }
 
 .workbench-status {
+  position: relative;
+  overflow: hidden;
   min-width: 9rem;
   padding: var(--space-xs) var(--space-sm);
   border: 1px solid var(--rule-soft);
   border-radius: 0.35rem;
   background: color-mix(in oklch, var(--washi) 50%, transparent);
+}
+
+.workbench-status::after {
+  content: attr(data-status-kanji);
+  position: absolute;
+  right: 0.35rem;
+  bottom: -0.28em;
+  font-family: var(--kanji);
+  font-size: 2.4rem;
+  font-weight: 700;
+  line-height: 1;
+  color: color-mix(in oklch, var(--shu) 13%, transparent);
+  pointer-events: none;
+}
+
+.workbench-status > * {
+  position: relative;
+  z-index: 1;
 }
 
 .status-value {
@@ -3733,6 +3772,8 @@ input[readonly] {
 }
 
 .match-card {
+  position: relative;
+  overflow: hidden;
   gap: var(--space-sm);
   padding: var(--space-md);
   border-radius: 0.45rem;
@@ -3743,6 +3784,28 @@ input[readonly] {
     var(--washi-soft);
   box-shadow: none;
   scroll-margin-block: 10rem;
+}
+
+.match-card::before {
+  content: attr(data-stage-kanji);
+  position: absolute;
+  right: 0.55rem;
+  top: -0.24em;
+  font-family: var(--kanji);
+  font-size: 4.4rem;
+  font-weight: 700;
+  line-height: 1;
+  color: color-mix(in oklch, var(--sumi) 5%, transparent);
+  pointer-events: none;
+}
+
+.match-card.is-next-bout::before {
+  color: color-mix(in oklch, var(--shu) 12%, transparent);
+}
+
+.match-card > * {
+  position: relative;
+  z-index: 1;
 }
 
 .match-card:hover {
@@ -3781,6 +3844,16 @@ input[readonly] {
   font-style: normal;
   font-weight: 800;
   font-size: 1.05rem;
+}
+
+.match-stage-kanji {
+  display: inline-block;
+  margin-right: 0.36rem;
+  font-family: var(--kanji);
+  font-size: 0.88rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  color: var(--shu-deep);
 }
 
 .match-state {
@@ -3850,6 +3923,10 @@ input[readonly] {
 .bout-vs-kanji {
   font-family: var(--kanji);
   color: color-mix(in oklch, var(--sumi) 42%, transparent);
+  font-size: clamp(1.3rem, 2.3vw, 2rem);
+  font-weight: 700;
+  opacity: 0.68;
+  letter-spacing: 0;
 }
 
 .score-slot-name {
@@ -3987,6 +4064,26 @@ input[readonly] {
   text-align: center;
 }
 
+.bout-pos,
+.bracket-panel.is-fullscreen .bout-pos {
+  display: inline-flex;
+  align-self: center;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  height: auto;
+  padding: 0.12rem 0.55rem;
+  border: 1px solid color-mix(in oklch, var(--sumi) 15%, transparent);
+  border-radius: 999px;
+  font-family: var(--kanji);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--indigo-deep);
+  background: color-mix(in oklch, var(--washi) 70%, transparent);
+  opacity: 1;
+}
+
 .bout-row .bout-score-slot .score-plate {
   width: 100%;
 }
@@ -4110,6 +4207,36 @@ body.scoreboard-body {
 
 .scoreboard-bout-row.is-current {
   background: color-mix(in oklch, var(--shu) 18%, transparent);
+}
+
+.scoreboard-eyebrow .kanji-kicker {
+  margin-right: 0.65rem;
+  font-size: 1.05em;
+  color: var(--shu-bright);
+}
+
+.scoreboard-divider,
+.scoreboard-team-vs,
+.scoreboard-team-tally-mid,
+.scoreboard-bout-pos {
+  font-family: var(--kanji);
+  font-style: normal;
+}
+
+.scoreboard-divider {
+  font-size: clamp(1.8rem, 4.4vh, 3.4rem);
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.scoreboard-team-vs {
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.scoreboard-team-tally-mid {
+  font-weight: 700;
+  letter-spacing: 0.12em;
 }
 
 @media (max-width: 1024px) {

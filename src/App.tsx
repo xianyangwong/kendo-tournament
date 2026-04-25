@@ -62,6 +62,27 @@ function getKendoPosition(index: number, total: number): string {
   return KENDO_POSITIONS[total]?.[index] ?? `#${index + 1}`
 }
 
+function getTournamentKindKanji(kind: TournamentRecord['kind']): string {
+  return kind === 'single' ? '個人戦' : '団体戦'
+}
+
+function getTournamentFormatKanji(format: TournamentRecord['format']): string {
+  return format === 'single' ? '勝抜戦' : '敗者復活'
+}
+
+function getMatchStageKanji(stage: BracketMatch['stage']): string {
+  switch (stage) {
+    case 'losers':
+      return '敗'
+    case 'final':
+    case 'reset':
+      return '決'
+    case 'winners':
+    default:
+      return '勝'
+  }
+}
+
 function getBoutKey(matchId: string, boutIndex: number): string {
   return `${matchId}:bout:${boutIndex}`
 }
@@ -596,10 +617,17 @@ function MatchCard({
   const scoringLocked = match.isComplete || timeExpired
 
   return (
-    <article className={`match-card stage-${match.stage}${isNextBout ? ' is-next-bout' : ''}`} data-match-id={match.id}>
+    <article
+      className={`match-card stage-${match.stage}${isNextBout ? ' is-next-bout' : ''}`}
+      data-match-id={match.id}
+      data-stage-kanji={getMatchStageKanji(match.stage)}
+    >
       <header className="match-header">
         <div>
-          <p className="match-code">{match.code}</p>
+          <p className="match-code">
+            <span className="match-stage-kanji" aria-hidden="true">{getMatchStageKanji(match.stage)}</span>
+            {match.code}
+          </p>
           <h4>{match.title}</h4>
         </div>
         <div className="match-header-actions">
@@ -903,10 +931,17 @@ function TeamMatchCard({
   // No members or auto-advance: fall back to click-to-select slot buttons
   if (match.isAutoAdvance || boutsTotal === 0) {
     return (
-      <article className={`match-card stage-${match.stage}${isNextBout ? ' is-next-bout' : ''}`} data-match-id={match.id}>
+      <article
+        className={`match-card stage-${match.stage}${isNextBout ? ' is-next-bout' : ''}`}
+        data-match-id={match.id}
+        data-stage-kanji={getMatchStageKanji(match.stage)}
+      >
         <header className="match-header">
           <div>
-            <p className="match-code">{match.code}</p>
+            <p className="match-code">
+              <span className="match-stage-kanji" aria-hidden="true">{getMatchStageKanji(match.stage)}</span>
+              {match.code}
+            </p>
             <h4>{match.title}</h4>
           </div>
           <div className="match-header-actions">
@@ -948,10 +983,17 @@ function TeamMatchCard({
   }
 
   return (
-    <article className={`match-card team-match-card stage-${match.stage}${isNextBout ? ' is-next-bout' : ''}`} data-match-id={match.id}>
+    <article
+      className={`match-card team-match-card stage-${match.stage}${isNextBout ? ' is-next-bout' : ''}`}
+      data-match-id={match.id}
+      data-stage-kanji={getMatchStageKanji(match.stage)}
+    >
       <header className="match-header">
         <div>
-          <p className="match-code">{match.code}</p>
+          <p className="match-code">
+            <span className="match-stage-kanji" aria-hidden="true">{getMatchStageKanji(match.stage)}</span>
+            {match.code}
+          </p>
           <h4>{match.title}</h4>
         </div>
         <div className="match-header-actions">
@@ -2385,14 +2427,16 @@ function TournamentWorkbench({
         </Link>
         <div className="workbench-title-block">
           <p className="workbench-eyebrow">
+            <span className="kanji-kicker">{getTournamentKindKanji(tournament.kind)}</span>
             {tournament.kind === 'single' ? 'Individual bracket' : 'Team shiai'}
             {' · '}
+            <span className="kanji-kicker">{getTournamentFormatKanji(tournament.format)}</span>
             {tournament.format === 'single' ? 'Single knockout' : 'Double knockout'}
           </p>
           <h1>{tournament.name}</h1>
         </div>
         <div className="workbench-header-right">
-          <div className="workbench-status">
+          <div className="workbench-status" data-status-kanji={bracket?.champion ? '優勝' : '次戦'}>
             <span className="status-label">{bracket?.champion ? 'Champion' : 'Next bout'}</span>
             <strong className="status-value">
               {bracket?.champion?.label ?? nextPendingMatch?.code ?? '—'}
@@ -2846,7 +2890,7 @@ function MatchScoreboardPage({ tournaments }: { tournaments: TournamentRecord[] 
     return (
       <main className="scoreboard scoreboard-singles">
         <header className="scoreboard-top">
-          <p className="scoreboard-eyebrow">{tournament.name}</p>
+          <p className="scoreboard-eyebrow"><span className="kanji-kicker">試合</span>{tournament.name}</p>
           <h1>{match.title}</h1>
           <p className="scoreboard-code">
             {match.code}
@@ -2859,7 +2903,7 @@ function MatchScoreboardPage({ tournaments }: { tournaments: TournamentRecord[] 
             <span className="scoreboard-score">{score.left % 1 === 0 ? score.left : score.left.toFixed(1)}</span>
             <span className="scoreboard-name">{match.left.label}</span>
           </div>
-          <div className="scoreboard-divider" aria-hidden="true">VS</div>
+          <div className="scoreboard-divider" aria-hidden="true">対</div>
           <div className={`scoreboard-side${winnerId === match.right.entrant.id ? ' is-winner' : ''}`}>
             <span className="scoreboard-score">{score.right % 1 === 0 ? score.right : score.right.toFixed(1)}</span>
             <span className="scoreboard-name">{match.right.label}</span>
@@ -2867,10 +2911,10 @@ function MatchScoreboardPage({ tournaments }: { tournaments: TournamentRecord[] 
         </section>
         {winnerId ? (
           <p className="scoreboard-victor">
-            Victor — {winnerId === match.left.entrant.id ? match.left.label : match.right.label}
+            勝者 — {winnerId === match.left.entrant.id ? match.left.label : match.right.label}
           </p>
         ) : (
-          <p className="scoreboard-victor scoreboard-victor-pending">In progress</p>
+          <p className="scoreboard-victor scoreboard-victor-pending">試合中</p>
         )}
       </main>
     )
@@ -2910,16 +2954,16 @@ function MatchScoreboardPage({ tournaments }: { tournaments: TournamentRecord[] 
   const focusRightWon = focusBout ? focusBout.right >= 2 && focusBout.right > focusBout.left : false
   const isLive = currentBoutIndex >= 0 && currentBoutIndex < boutsTotal
   const focusLabel = focusBoutIndex >= 0
-    ? `${isLive ? 'Now playing' : 'Final bout'} \u00b7 ${getKendoPosition(focusBoutIndex, boutsTotal)}`
+    ? `${isLive ? '進行中' : '最終戦'} \u00b7 ${getKendoPosition(focusBoutIndex, boutsTotal)}`
     : ''
 
   return (
     <main className="scoreboard scoreboard-team">
       <header className="scoreboard-top">
-        <p className="scoreboard-eyebrow">{tournament.name} &middot; {match.title}</p>
+        <p className="scoreboard-eyebrow"><span className="kanji-kicker">団体戦</span>{tournament.name} &middot; {match.title}</p>
         <h1>
           <span className="scoreboard-team-name">{match.left.label}</span>
-          <span className="scoreboard-team-vs"> vs </span>
+          <span className="scoreboard-team-vs"> 対 </span>
           <span className="scoreboard-team-name">{match.right.label}</span>
         </h1>
         <p className="scoreboard-code">
@@ -2940,7 +2984,7 @@ function MatchScoreboardPage({ tournaments }: { tournaments: TournamentRecord[] 
             <span className="scoreboard-name">{focusLeftPlayer?.name.trim() || 'Open slot'}</span>
             <span className="scoreboard-subscore">{match.left.label}</span>
           </div>
-          <div className="scoreboard-divider" aria-hidden="true">VS</div>
+          <div className="scoreboard-divider" aria-hidden="true">対</div>
           <div className={`scoreboard-side${focusRightWon ? ' is-winner' : ''}`}>
             <span className="scoreboard-score">{fmt(focusBout.right)}</span>
             <span className="scoreboard-name">{focusRightPlayer?.name.trim() || 'Open slot'}</span>
@@ -2956,7 +3000,7 @@ function MatchScoreboardPage({ tournaments }: { tournaments: TournamentRecord[] 
             <span className="scoreboard-team-tally-label">{match.left.label}</span>
             <span className="scoreboard-team-tally-sub">{fmt(stats.leftTotal)} ippons</span>
           </div>
-          <span className="scoreboard-team-tally-mid">Team</span>
+          <span className="scoreboard-team-tally-mid">団体</span>
           <div className={`scoreboard-team-tally-side${winnerId === match.right.entrant.id || stats.teamWinner === 'right' ? ' is-winner' : ''}`}>
             <span className="scoreboard-team-tally-wins">{stats.rightWins}</span>
             <span className="scoreboard-team-tally-label">{match.right.label}</span>
@@ -2988,7 +3032,7 @@ function MatchScoreboardPage({ tournaments }: { tournaments: TournamentRecord[] 
 
       {winnerId ? (
         <p className="scoreboard-victor">
-          Victor &mdash; {winnerId === match.left.entrant.id ? match.left.label : match.right.label}
+          勝者 &mdash; {winnerId === match.left.entrant.id ? match.left.label : match.right.label}
         </p>
       ) : null}
     </main>
