@@ -597,7 +597,8 @@
   transition: background 0.12s, color 0.12s, border-color 0.12s;
 }
 
-.reset-bracket-btn {
+.reset-bracket-btn,
+.delete-tournament-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -605,10 +606,13 @@
   height: 2.2rem;
   min-height: 2.2rem;
   padding: 0;
+  flex-shrink: 0;
+}
+
+.reset-bracket-btn {
   border-color: rgba(196, 53, 24, 0.42);
   background: var(--shu-faint);
   color: var(--shu-deep);
-  flex-shrink: 0;
 }
 
 .reset-bracket-btn:hover {
@@ -617,7 +621,20 @@
   color: var(--washi);
 }
 
-.reset-bracket-btn svg {
+.delete-tournament-btn {
+  border-color: var(--rule);
+  background: transparent;
+  color: var(--ink-mid);
+}
+
+.delete-tournament-btn:hover {
+  border-color: var(--shu-deep);
+  background: var(--washi-deep);
+  color: var(--shu-deep);
+}
+
+.reset-bracket-btn svg,
+.delete-tournament-btn svg {
   width: 0.95rem;
   height: 0.95rem;
   display: block;
@@ -3586,7 +3603,8 @@ input:focus {
   gap: var(--space-xs);
 }
 
-.reset-bracket-btn {
+.reset-bracket-btn,
+.delete-tournament-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3594,10 +3612,13 @@ input:focus {
   height: 2.2rem;
   min-height: 2.2rem;
   padding: 0;
+  flex-shrink: 0;
+}
+
+.reset-bracket-btn {
   border-color: color-mix(in oklch, var(--shu) 44%, transparent);
   background: var(--shu-faint);
   color: var(--shu-deep);
-  flex-shrink: 0;
 }
 
 .reset-bracket-btn:hover {
@@ -3606,7 +3627,20 @@ input:focus {
   color: var(--washi);
 }
 
-.reset-bracket-btn svg {
+.delete-tournament-btn {
+  border-color: var(--rule);
+  background: color-mix(in oklch, var(--washi-soft) 56%, transparent);
+  color: var(--ink-mid);
+}
+
+.delete-tournament-btn:hover {
+  border-color: var(--shu-deep);
+  background: var(--washi-deep);
+  color: var(--shu-deep);
+}
+
+.reset-bracket-btn svg,
+.delete-tournament-btn svg {
   width: 0.95rem;
   height: 0.95rem;
   display: block;

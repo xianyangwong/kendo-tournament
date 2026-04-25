@@ -1835,9 +1835,11 @@ function TournamentWizard({
 function TournamentWorkbench({
   tournament,
   onChange,
+  onDelete,
 }: {
   tournament: TournamentRecord
   onChange: (updater: (current: TournamentRecord) => TournamentRecord) => void
+  onDelete?: () => void
 }) {
   const entrants = toTournamentEntrants(tournament.kind, tournament.singles, tournament.teams)
   const bracket = entrants.length >= 2
@@ -2416,6 +2418,26 @@ function TournamentWorkbench({
                 <path d="M2 2.6v3.6h3.6" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </button>
+            {onDelete ? (
+              <button
+                type="button"
+                className="delete-tournament-btn"
+                onClick={onDelete}
+                title="Delete tournament"
+                aria-label="Delete tournament"
+              >
+                <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                  <path
+                    d="M3.2 4.4h9.6M6.4 4.4V3.2h3.2v1.2M5 6.4l.45 6.2h5.1L11 6.4"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.45"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
+            ) : null}
             <button
               type="button"
               className="settings-icon-btn"
@@ -2749,31 +2771,19 @@ function TournamentDetailPage({
   }
 
   const hasStarted = hasTournamentStarted(tournament)
+  const handleDeleteTournament = () => {
+    if (window.confirm('Delete this tournament from local storage?')) {
+      onDeleteTournament(tournament.id)
+      navigate('/')
+    }
+  }
 
   return (
-    <AppFrame
-      action={
-        !hasStarted ? (
-          <div className="topbar-action-row">
-            <button
-              type="button"
-              className="ghost-button"
-              onClick={() => {
-                if (window.confirm('Delete this tournament from local storage?')) {
-                  onDeleteTournament(tournament.id)
-                  navigate('/')
-                }
-              }}
-            >
-              Delete tournament
-            </button>
-          </div>
-        ) : undefined
-      }
-    >
+    <AppFrame>
       <TournamentWorkbench
         tournament={tournament}
         onChange={(updater) => onUpdateTournament(tournament.id, updater)}
+        onDelete={!hasStarted ? handleDeleteTournament : undefined}
       />
     </AppFrame>
   )
