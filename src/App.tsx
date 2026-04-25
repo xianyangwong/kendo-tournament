@@ -2341,7 +2341,6 @@ function TournamentWorkbench({
     return null
   })()
 
-  const [bracketFullscreen, setBracketFullscreen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
 
   useEffect(() => {
@@ -2352,20 +2351,6 @@ function TournamentWorkbench({
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
   }, [settingsOpen])
-
-  useEffect(() => {
-    if (!bracketFullscreen) return
-    const prev = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') setBracketFullscreen(false)
-    }
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.body.style.overflow = prev
-      document.removeEventListener('keydown', onKey)
-    }
-  }, [bracketFullscreen])
 
   useEffect(() => {
     const nextMatchId = nextPendingMatch?.id ?? null
@@ -2381,20 +2366,6 @@ function TournamentWorkbench({
       if (!nextMatchCard) return
       const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
       const behavior: ScrollBehavior = prefersReducedMotion ? 'auto' : 'smooth'
-      const fullscreenPanel = nextMatchCard.closest<HTMLElement>('.bracket-panel.is-fullscreen')
-
-      if (fullscreenPanel) {
-        const panelRect = fullscreenPanel.getBoundingClientRect()
-        const cardRect = nextMatchCard.getBoundingClientRect()
-        const heading = fullscreenPanel.querySelector<HTMLElement>('.bracket-heading')
-        const headingOffset = (heading?.getBoundingClientRect().height ?? 0) + 24
-        fullscreenPanel.scrollTo({
-          top: Math.max(0, fullscreenPanel.scrollTop + cardRect.top - panelRect.top - headingOffset),
-          behavior,
-        })
-        return
-      }
-
       const stickyHeader = document.querySelector<HTMLElement>('.workbench-header')
       const headerOffset = (stickyHeader?.getBoundingClientRect().height ?? 0) + 24
       const cardRect = nextMatchCard.getBoundingClientRect()
@@ -2673,7 +2644,7 @@ function TournamentWorkbench({
           ) : null}
 
           {bracket ? (
-            <div className={`panel-card bracket-panel${bracketFullscreen ? ' is-fullscreen' : ''}`}>
+            <div className="panel-card bracket-panel">
               <div className="panel-heading bracket-heading">
                 <div className="bracket-heading-meta">
                   <h2>Live bracket</h2>
@@ -2687,15 +2658,6 @@ function TournamentWorkbench({
                       : null}
                   </span>
                 </div>
-                <button
-                  type="button"
-                  className="ghost-button bracket-fullscreen-toggle"
-                  onClick={() => setBracketFullscreen((v) => !v)}
-                  aria-pressed={bracketFullscreen}
-                  title={bracketFullscreen ? 'Exit fullscreen (Esc)' : 'Open in fullscreen for projection'}
-                >
-                  {bracketFullscreen ? '✕  Exit fullscreen' : '⛶  Fullscreen'}
-                </button>
               </div>
 
               <RoundColumns
