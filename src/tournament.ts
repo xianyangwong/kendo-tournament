@@ -189,8 +189,10 @@ function buildMatch(
 /**
  * Compact single-elimination bracket. Each round pairs as many entrants as
  * possible; if the count is odd, the top remaining seed gets a BYE that round
- * and advances directly. This keeps the bracket dense — no empty cards, at
- * most one BYE per round — instead of inflating to the next power of two.
+ * and advances directly. By default this keeps the bracket dense — no empty
+ * cards, at most one BYE per round — instead of inflating to the next power of
+ * two. Double knockout can opt into showing those BYE advances as match cards
+ * so every winners-bracket feed is visible to officials.
  *
  * Total rounds = ceil(log2(n)). For 5 entrants:
  *   R1: 2 matches + 1 bye  (4 play, 1 advances free)  -> 3 advance
@@ -200,6 +202,7 @@ function buildMatch(
 function buildCompactWinnersBracket(
   entrants: TournamentEntrant[],
   results: ResultMap,
+  showAutoAdvanceMatches = false,
 ): { rounds: InternalRound[]; championSlot: MatchSlot } {
   if (entrants.length === 0) {
     return { rounds: [], championSlot: EMPTY_SLOT }
@@ -242,17 +245,31 @@ function buildCompactWinnersBracket(
         results,
       )
     })
+    const byeMatch = byeSlot && showAutoAdvanceMatches
+      ? buildMatch(
+          `w-${roundIndex + 1}-${matches.length + 1}`,
+          `W${roundIndex + 1}M${matches.length + 1}`,
+          `Match ${matches.length + 1}`,
+          'winners',
+          byeSlot,
+          createByeSlot(),
+          results,
+        )
+      : null
+    const visibleMatches = byeMatch ? [...matches, byeMatch] : matches
 
     rounds.push({
       id: `winners-${roundIndex + 1}`,
       title: getStandardRoundTitle(roundIndex, totalRounds),
       subtitle: roundIndex === totalRounds - 1 ? 'Final bout' : 'Advance on one loss',
-      matches,
+      matches: visibleMatches,
     })
 
     // Top seed (with bye) advances first, preserving seed order for next round
     const winners = matches.map((match) => match.winnerSlot)
-    currentSlots = byeSlot ? [byeSlot, ...winners] : winners
+    currentSlots = byeMatch
+      ? [byeMatch.winnerSlot, ...winners]
+      : (byeSlot ? [byeSlot, ...winners] : winners)
   }
 
   return {
@@ -362,7 +379,7 @@ export function buildTournamentBracket(
   results: ResultMap,
 ): BracketView {
   const { rounds: winnersRounds, championSlot: winnersChampionSlot } =
-    buildCompactWinnersBracket(entrants, results)
+    buildCompactWinnersBracket(entrants, results, format === 'double')
   const losersRounds =
     format === 'double' ? buildLosersBracket(winnersRounds, results) : []
 

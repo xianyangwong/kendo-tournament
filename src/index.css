@@ -1,42 +1,55 @@
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Shippori+Mincho:wght@500;700;800&family=Manrope:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=BIZ+UDPMincho:wght@400;700&family=Zen+Old+Mincho:wght@500;600;700;900&display=swap');
 
 :root {
-  /* Ground — washi paper (warm aged cream) */
-  --washi: #f4ead8;
-  --washi-soft: #ece2cf;
-  --washi-deep: #e2d7c2;
-  --washi-edge: #d4c8b0;
+  /* Ground: washi paper, defined in OKLCH for perceptual steps. */
+  --washi: oklch(93% 0.026 83);
+  --washi-soft: oklch(89% 0.028 82);
+  --washi-deep: oklch(83% 0.032 80);
+  --washi-edge: oklch(76% 0.035 78);
 
-  /* Text — sumi ink (near-black, warm-tinted) */
-  --sumi: #18110a;
-  --sumi-soft: #2c2015;
-  --ink-mid: #4d3d2b;
-  --ink-soft: #7a6550;
-  --ink-faint: #a8927b;
+  /* Text: sumi ink, warm-tinted instead of a neutral absolute. */
+  --sumi: oklch(18% 0.025 62);
+  --sumi-soft: oklch(25% 0.035 62);
+  --ink-mid: oklch(37% 0.043 64);
+  --ink-soft: oklch(50% 0.055 65);
+  --ink-faint: oklch(63% 0.048 66);
 
-  /* Vermillion (shu) — deeper for light bg contrast */
-  --shu: #c43518;
-  --shu-deep: #9e2e10;
-  --shu-bright: #d94e29;
-  --shu-pale: rgba(196, 53, 24, 0.14);
-  --shu-faint: rgba(196, 53, 24, 0.07);
+  /* Shu: controlled vermillion for live decisions. */
+  --shu: oklch(50% 0.17 35);
+  --shu-deep: oklch(39% 0.145 35);
+  --shu-bright: oklch(60% 0.18 35);
+  --shu-pale: color-mix(in oklch, var(--shu) 17%, transparent);
+  --shu-faint: color-mix(in oklch, var(--shu) 8%, transparent);
 
-  /* Hakama indigo */
-  --indigo: #3a5a96;
-  --indigo-soft: rgba(58, 90, 150, 0.16);
+  /* Hakama indigo for structure and secondary states. */
+  --indigo: oklch(42% 0.105 266);
+  --indigo-deep: oklch(31% 0.082 265);
+  --indigo-soft: color-mix(in oklch, var(--indigo) 17%, transparent);
 
-  /* Lines — dark on light */
-  --rule: rgba(24, 17, 10, 0.12);
-  --rule-soft: rgba(24, 17, 10, 0.07);
+  --moss: oklch(48% 0.075 145);
+  --gold: oklch(70% 0.11 80);
 
-  /* Shadows */
-  --shadow-paper: 0 1px 0 rgba(255, 255, 255, 0.85) inset, 0 2px 8px rgba(24, 17, 10, 0.08);
-  --shadow-deep: 0 8px 24px rgba(24, 17, 10, 0.14);
+  /* Lines and shadows. */
+  --rule: color-mix(in oklch, var(--sumi) 17%, transparent);
+  --rule-soft: color-mix(in oklch, var(--sumi) 9%, transparent);
+  --shadow-paper: 0 1px 0 color-mix(in oklch, var(--washi) 92%, oklch(98% 0.01 83)) inset,
+    0 2px 10px color-mix(in oklch, var(--sumi) 10%, transparent);
+  --shadow-deep: 0 16px 40px color-mix(in oklch, var(--sumi) 18%, transparent);
 
-  /* Type system */
-  --display: 'Cormorant Garamond', 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
-  --body: 'Manrope', 'Avenir Next', 'Helvetica Neue', sans-serif;
-  --kanji: 'Shippori Mincho', 'Hiragino Mincho ProN', 'Yu Mincho', serif;
+  /* Type system. */
+  --display: 'Zen Old Mincho', 'BIZ UDPMincho', 'Hiragino Mincho ProN', serif;
+  --body: 'Atkinson Hyperlegible', 'Manrope', 'Avenir Next', sans-serif;
+  --kanji: 'BIZ UDPMincho', 'Yu Mincho', serif;
+
+  --space-2xs: 0.25rem;
+  --space-xs: 0.5rem;
+  --space-sm: 0.75rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2rem;
+  --space-2xl: 3rem;
+  --space-3xl: 4rem;
+  --space-4xl: 6rem;
 
   /* Legacy aliases */
   --paper: var(--washi);
@@ -77,23 +90,30 @@ body {
   min-width: 320px;
   background-color: var(--washi);
   background-image:
-    url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.24  0 0 0 0 0.18  0 0 0 0 0.1  0 0 0 0.022 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"),
     repeating-linear-gradient(
       90deg,
       transparent 0,
-      transparent 240px,
-      rgba(24, 17, 10, 0.007) 240px,
-      rgba(24, 17, 10, 0.007) 241px
+      transparent 13.5rem,
+      color-mix(in oklch, var(--sumi) 3%, transparent) 13.5rem,
+      color-mix(in oklch, var(--sumi) 3%, transparent) calc(13.5rem + 1px)
     ),
-    radial-gradient(circle at 15% -5%, rgba(240, 228, 208, 0.6), transparent 50%),
-    radial-gradient(circle at 108% 108%, rgba(180, 55, 25, 0.06), transparent 45%),
-    linear-gradient(180deg, #f6ecda, #f2e7d4 60%, #f4ead8);
+    repeating-linear-gradient(
+      0deg,
+      transparent 0,
+      transparent 11rem,
+      color-mix(in oklch, var(--sumi) 2%, transparent) 11rem,
+      color-mix(in oklch, var(--sumi) 2%, transparent) calc(11rem + 1px)
+    ),
+    url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.24  0 0 0 0 0.18  0 0 0 0 0.1  0 0 0 0.025 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"),
+    radial-gradient(circle at 14% -8%, color-mix(in oklch, var(--gold) 16%, transparent), transparent 45%),
+    radial-gradient(circle at 104% 104%, color-mix(in oklch, var(--shu) 8%, transparent), transparent 42%),
+    linear-gradient(180deg, oklch(95% 0.025 83), var(--washi) 55%, oklch(91% 0.032 83));
 }
 
 #root {
-  width: min(1440px, calc(100% - 2rem));
+  width: min(1500px, calc(100% - clamp(1rem, 3vw, 2.5rem)));
   margin: 0 auto;
-  padding: 1.4rem 0 3rem;
+  padding: clamp(0.9rem, 2vw, 1.6rem) 0 clamp(2rem, 5vw, 4rem);
 }
 
 h1,
@@ -115,19 +135,19 @@ h4 {
 }
 
 h1 {
-  font-size: clamp(3rem, 7vw, 6.2rem);
-  line-height: 0.92;
-  letter-spacing: -0.025em;
-  font-weight: 500;
+  font-size: clamp(2.8rem, 6.8vw, 6rem);
+  line-height: 0.95;
+  letter-spacing: 0;
+  font-weight: 700;
 }
 
 h2 {
-  font-size: clamp(1.6rem, 2.6vw, 2.4rem);
+  font-size: clamp(1.45rem, 2.3vw, 2.15rem);
   line-height: 1.05;
 }
 
 h3 {
-  font-size: clamp(1.2rem, 1.8vw, 1.5rem);
+  font-size: clamp(1.12rem, 1.7vw, 1.45rem);
 }
 
 h4 {
@@ -142,4 +162,10 @@ p {
 ::selection {
   background: var(--shu-pale);
   color: var(--sumi);
+}
+
+@media (max-width: 720px) {
+  #root {
+    width: min(100% - 1rem, 1500px);
+  }
 }

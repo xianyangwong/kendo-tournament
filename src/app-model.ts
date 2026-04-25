@@ -35,12 +35,21 @@ export interface MatchScore {
   right: number
 }
 
+export type ScoreSide = 'left' | 'right'
+export type ScoreAwardAmount = 0.5 | 1
+
+export interface ScoreEvent {
+  side: ScoreSide
+  amount: ScoreAwardAmount
+}
+
 export interface TournamentRecord extends TournamentDraft {
   id: string
   createdAt: string
   updatedAt: string
   results: Record<string, string>
   scores: Record<string, MatchScore>
+  scoreEvents: Record<string, ScoreEvent[]>
   lineups: Record<string, { left: string[]; right: string[] }>
   timers: Record<string, MatchTimerState>
 }
@@ -108,7 +117,7 @@ export function cloneTeams(entries: TeamEntry[]): TeamEntry[] {
 
 export function createTournamentRecord(
   draft: TournamentDraft,
-  options?: Partial<Pick<TournamentRecord, 'id' | 'createdAt' | 'updatedAt' | 'results' | 'scores' | 'lineups' | 'timers'>>,
+  options?: Partial<Pick<TournamentRecord, 'id' | 'createdAt' | 'updatedAt' | 'results' | 'scores' | 'scoreEvents' | 'lineups' | 'timers'>>,
 ): TournamentRecord {
   const timestamp = new Date().toISOString()
 
@@ -124,6 +133,7 @@ export function createTournamentRecord(
     teams: shuffled(cloneTeams(draft.teams)),
     matchDurationSeconds: draft.matchDurationSeconds ?? DEFAULT_MATCH_DURATION_SECONDS,
     scores: options?.scores ?? {},
+    scoreEvents: options?.scoreEvents ?? {},
     lineups: options?.lineups ?? {},
     timers: options?.timers ?? {},
   }
