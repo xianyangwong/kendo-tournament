@@ -14,6 +14,7 @@ import {
   type BracketMatch,
   type BracketRound,
 } from './tournament'
+import { subscribeToPwaUpdates } from './pwa'
 import {
   TOURNAMENT_STORAGE_KEY,
   DEFAULT_MATCH_DURATION_SECONDS,
@@ -150,6 +151,7 @@ function stopTimerState(
 ): MatchTimerState | undefined {
   if (!timer || timer.runningSince == null) return timer
   return {
+    ...timer,
     remainingMs: Math.max(0, timer.remainingMs - (now - timer.runningSince)),
     runningSince: null,
   }
@@ -188,6 +190,10 @@ function stopMatchTimers(
 function isTimerExpired(timer: MatchTimerState | undefined, durationSeconds: number): boolean {
   if (!timer) return false
   return getTimerRemainingMs(timer, durationSeconds) <= 0
+}
+
+function isEnchoTimer(timer: MatchTimerState | undefined): boolean {
+  return timer?.phase === 'encho'
 }
 
 function hasMatchTimerStarted(
@@ -241,6 +247,13 @@ function isBoutScoreDecided(score: MatchScore | undefined): boolean {
   return !!score && (score.left >= 2 || score.right >= 2)
 }
 
+function getScoreLeader(score: MatchScore | undefined): ScoreSide | null {
+  if (!score) return null
+  if (score.left > score.right) return 'left'
+  if (score.right > score.left) return 'right'
+  return null
+}
+
 function isTeamBoutComplete(
   score: MatchScore | undefined,
   timer: MatchTimerState | undefined,
@@ -283,9 +296,10 @@ function computeTeamStats(
       finishedBouts++
     }
 
-    if (isBoutScoreDecided(score)) {
-      if (score!.left > score!.right) leftWins++
-      else if (score!.right > score!.left) rightWins++
+    if (boutFinished) {
+      const scoreLeader = getScoreLeader(score)
+      if (scoreLeader === 'left') leftWins++
+      else if (scoreLeader === 'right') rightWins++
     }
   }
 
@@ -379,8 +393,10 @@ function ScoreboardClock({
   }, [isRunning])
   const remaining = getTimerRemainingMs(timer, durationSeconds)
   const expired = remaining <= 0 && timer != null
+  const isEncho = isEnchoTimer(timer)
   return (
     <span className={`scoreboard-clock${isRunning ? ' is-running' : ''}${expired ? ' is-expired' : ''}`}>
+      {isEncho ? <span className="scoreboard-clock-phase">延長</span> : null}
       {formatTimerMs(remaining)}
     </span>
   )
@@ -685,6 +701,7 @@ function MatchTimer({
 }) {
   const [, setTick] = useState(0)
   const isRunning = timer?.runningSince != null
+  const isEncho = isEnchoTimer(timer)
   const remaining = getTimerRemainingMs(timer, durationSeconds)
   const expired = remaining <= 0 && timer != null
   const controlsDisabled = disabled || disableStart
@@ -703,6 +720,12 @@ function MatchTimer({
 
   return (
     <div className={`match-timer${expired ? ' is-expired' : ''}${isRunning ? ' is-running' : ''}${disabled && !isRunning ? ' is-disabled' : ''}${compact ? ' is-compact' : ''}`}>
+      {isEncho ? (
+        <span className="match-timer-phase">
+          <span aria-hidden="true">延長</span>
+          Encho
+        </span>
+      ) : null}
       <span className="match-timer-display">{formatTimerMs(remaining)}</span>
       {!locked ? (
         <div className="match-timer-controls">
@@ -800,10 +823,23 @@ function MatchCard({
   const matchReady = !!match.left.entrant && !!match.right.entrant
   const hasScore = matchScore && (matchScore.left > 0 || matchScore.right > 0)
   const timeExpired = isTimerExpired(timer, durationSeconds)
+  const isEncho = isEnchoTimer(timer)
   const scoringLocked = match.isComplete || timeExpired
   const matchState = getMatchStateMeta(match, !!hasScore || !!timer)
   const scoreboardReady = !!timer
   const canResetScore = scoreboardReady || !!hasScore || match.isComplete
+  const timeoutLeader = timeExpired ? getScoreLeader(matchScore) : null
+
+  useEffect(() => {
+    if (!timeExpired || match.isComplete || !timeoutLeader) return
+    const winner = timeoutLeader === 'left' ? match.left.entrant : match.right.entrant
+    if (winner) onSelectWinner(match.id, winner.id)
+  }, [match.id, match.isComplete, match.left.entrant, match.right.entrant, onSelectWinner, timeExpired, timeoutLeader])
+
+  useEffect(() => {
+    if (!timeExpired || match.isComplete || timeoutLeader) return
+    onTimerExpire?.(match.id)
+  }, [match.id, match.isComplete, onTimerExpire, timeExpired, timeoutLeader])
 
   return (
     <article
@@ -882,23 +918,15 @@ function MatchCard({
               },
             )}
           </div>
-          {timeExpired && !match.isComplete ? (
+          {timeExpired && !match.isComplete && !timeoutLeader ? (
             <div className="timer-expired-block">
-              <p className="timer-expired-note">Time — bout drawn. Pick a winner to advance the bracket.</p>
-              <div className="timer-expired-actions">
-                {[match.left, match.right].map((slot) =>
-                  slot.entrant ? (
-                    <button
-                      key={slot.entrant.id}
-                      type="button"
-                      className="ghost-button"
-                      onClick={() => onSelectWinner(match.id, slot.entrant!.id)}
-                    >
-                      {slot.label}
-                    </button>
-                  ) : null,
-                )}
-              </div>
+              <p className="timer-expired-note">Time — scores tied. Encho starts next; first score wins.</p>
+            </div>
+          ) : null}
+          {isEncho && !match.isComplete && !timeExpired ? (
+            <div className="encho-note">
+              <span aria-hidden="true">延長</span>
+              <p>Encho — first score wins.</p>
             </div>
           ) : null}
         </>
@@ -2281,8 +2309,11 @@ function TournamentWorkbench({
 
       let nextResults = current.results
       let nextTimers = current.timers ?? {}
-      if (nextScore.left >= 2 || nextScore.right >= 2) {
-        const winner = nextScore.left >= 2 ? match.left.entrant : match.right.entrant
+      const isEnchoScore = isEnchoTimer(current.timers?.[matchId])
+      if (isEnchoScore || nextScore.left >= 2 || nextScore.right >= 2) {
+        const winner = isEnchoScore
+          ? (side === 'left' ? match.left.entrant : match.right.entrant)
+          : (nextScore.left >= 2 ? match.left.entrant : match.right.entrant)
         if (winner) {
           nextResults = { ...current.results, [matchId]: winner.id }
           nextTimers = stopTimerInMap(current.timers, matchId)
@@ -2557,7 +2588,7 @@ function TournamentWorkbench({
         ...current,
         timers: {
           ...(current.timers ?? {}),
-          [key]: { remainingMs, runningSince: Date.now() },
+          [key]: { ...existing, remainingMs, runningSince: Date.now() },
         },
         updatedAt: new Date().toISOString(),
       }
@@ -2573,7 +2604,7 @@ function TournamentWorkbench({
         ...current,
         timers: {
           ...(current.timers ?? {}),
-          [key]: { remainingMs, runningSince: null },
+          [key]: { ...existing, remainingMs, runningSince: null },
         },
         updatedAt: new Date().toISOString(),
       }
@@ -2582,6 +2613,19 @@ function TournamentWorkbench({
 
   function handleTimerReset(key: string) {
     onChange((current) => {
+      const existing = current.timers?.[key]
+      if (isEnchoTimer(existing)) {
+        const durationMs = (current.matchDurationSeconds ?? DEFAULT_MATCH_DURATION_SECONDS) * 1000
+        return {
+          ...current,
+          timers: {
+            ...(current.timers ?? {}),
+            [key]: { ...existing, remainingMs: durationMs, runningSince: null },
+          },
+          updatedAt: new Date().toISOString(),
+        }
+      }
+
       const rest = { ...(current.timers ?? {}) }
       delete rest[key]
       return {
@@ -2595,16 +2639,52 @@ function TournamentWorkbench({
   function handleTimerExpire(key: string) {
     onChange((current) => {
       const existing = current.timers?.[key]
-      if (existing && existing.runningSince == null && existing.remainingMs <= 0) return current
+      const boutMatchInfo = getBoutMatchInfo(key)
+      if (existing && existing.runningSince == null && existing.remainingMs <= 0 && !(current.kind === 'single' && !boutMatchInfo)) {
+        return current
+      }
 
       let nextTimers = {
         ...(current.timers ?? {}),
         [key]: { remainingMs: 0, runningSince: null },
       }
       let nextResults = current.results
-      const boutMatchInfo = getBoutMatchInfo(key)
 
-      if (current.kind === 'team' && boutMatchInfo) {
+      if (current.kind === 'single' && !boutMatchInfo) {
+        const currentEntrants = toTournamentEntrants(current.kind, current.singles, current.teams)
+        const currentBracket = currentEntrants.length >= 2
+          ? buildTournamentBracket(currentEntrants, current.format, current.results)
+          : null
+        const allMatches = currentBracket
+          ? [...currentBracket.winnersRounds, ...currentBracket.losersRounds, ...currentBracket.finalRounds]
+              .flatMap((r) => r.matches)
+          : []
+        const match = allMatches.find((m) => m.id === key)
+
+        if (match && !match.isAutoAdvance && !match.isComplete) {
+          const scoreLeader = getScoreLeader((current.scores ?? {})[key])
+          const winnerEntrant =
+            scoreLeader === 'left'
+              ? match.left.entrant
+              : scoreLeader === 'right'
+                ? match.right.entrant
+                : null
+
+          if (winnerEntrant) {
+            nextResults = { ...current.results, [key]: winnerEntrant.id }
+          } else {
+            if (current.results[key]) {
+              nextResults = { ...current.results }
+              delete nextResults[key]
+            }
+            const durationMs = (current.matchDurationSeconds ?? DEFAULT_MATCH_DURATION_SECONDS) * 1000
+            nextTimers = {
+              ...nextTimers,
+              [key]: { remainingMs: durationMs, runningSince: null, phase: 'encho' },
+            }
+          }
+        }
+      } else if (current.kind === 'team' && boutMatchInfo) {
         const { matchId } = boutMatchInfo
         const currentEntrants = toTournamentEntrants(current.kind, current.singles, current.teams)
         const currentBracket = currentEntrants.length >= 2
@@ -3459,6 +3539,7 @@ function MatchScoreboardPage({ tournaments }: { tournaments: TournamentRecord[] 
 }
 
 function App() {
+  const [pwaUpdate, setPwaUpdate] = useState<(() => void) | null>(null)
   const [tournaments, setTournaments] = useState<TournamentRecord[]>(() => {
     if (typeof window === 'undefined') {
       return []
@@ -3490,6 +3571,10 @@ function App() {
   useEffect(() => {
     window.localStorage.setItem(TOURNAMENT_STORAGE_KEY, JSON.stringify(tournaments))
   }, [tournaments])
+
+  useEffect(() => subscribeToPwaUpdates((applyUpdate) => {
+    setPwaUpdate(() => applyUpdate)
+  }), [])
 
   // Cross-tab sync: when another tab (e.g. the scoreboard tab) writes to
   // localStorage, refresh local state so the scoreboard updates live.
@@ -3541,30 +3626,44 @@ function App() {
   }
 
   return (
-    <BrowserRouter basename={import.meta.env.BASE_URL}>
-      <Routes>
-        <Route path="/" element={<HomePage tournaments={tournaments} onDeleteTournament={deleteTournament} />} />
-        <Route
-          path="/tournaments/new"
-          element={<TournamentWizard onCreateTournament={createTournament} />}
-        />
-        <Route
-          path="/tournaments/:tournamentId"
-          element={
-            <TournamentDetailPage
-              tournaments={tournaments}
-              onUpdateTournament={updateTournament}
-              onDeleteTournament={deleteTournament}
-            />
-          }
-        />
-        <Route
-          path="/tournaments/:tournamentId/match/:matchId/scoreboard"
-          element={<MatchScoreboardPage tournaments={tournaments} />}
-        />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </BrowserRouter>
+    <>
+      <BrowserRouter basename={import.meta.env.BASE_URL}>
+        <Routes>
+          <Route path="/" element={<HomePage tournaments={tournaments} onDeleteTournament={deleteTournament} />} />
+          <Route
+            path="/tournaments/new"
+            element={<TournamentWizard onCreateTournament={createTournament} />}
+          />
+          <Route
+            path="/tournaments/:tournamentId"
+            element={
+              <TournamentDetailPage
+                tournaments={tournaments}
+                onUpdateTournament={updateTournament}
+                onDeleteTournament={deleteTournament}
+              />
+            }
+          />
+          <Route
+            path="/tournaments/:tournamentId/match/:matchId/scoreboard"
+            element={<MatchScoreboardPage tournaments={tournaments} />}
+          />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </BrowserRouter>
+      {pwaUpdate ? (
+        <div className="pwa-update-toast" role="status" aria-live="polite">
+          <div>
+            <span>Update ready</span>
+            <strong>Refresh to use the latest shiai desk.</strong>
+          </div>
+          <div className="pwa-update-actions">
+            <button type="button" onClick={pwaUpdate}>Refresh</button>
+            <button type="button" onClick={() => setPwaUpdate(null)} aria-label="Dismiss update">Dismiss</button>
+          </div>
+        </div>
+      ) : null}
+    </>
   )
 }
 

@@ -1,7 +1,7 @@
 // Kendo Tournament — Service Worker
 // Strategy: cache-first for static assets, network-first for navigation.
 
-const CACHE = 'kendo-v1';
+const CACHE = 'kendo-v2';
 
 // On install: cache the shell
 self.addEventListener('install', (event) => {
@@ -12,10 +12,19 @@ self.addEventListener('install', (event) => {
         '/kendo-tournament/index.html',
         '/kendo-tournament/manifest.webmanifest',
         '/kendo-tournament/pwa-icon.svg',
+        '/kendo-tournament/pwa-icon-180.png',
+        '/kendo-tournament/pwa-icon-192.png',
+        '/kendo-tournament/pwa-icon-512.png',
+        '/kendo-tournament/pwa-icon-maskable-512.png',
       ])
     )
   );
-  self.skipWaiting();
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 // On activate: delete old caches

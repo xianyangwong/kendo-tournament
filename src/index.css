@@ -1,4 +1,40 @@
-@import url('https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=BIZ+UDPMincho:wght@400;700&family=Zen+Old+Mincho:wght@500;600;700;900&display=swap');
+@font-face {
+  font-family: 'Kendo Body Local';
+  src:
+    local('Atkinson Hyperlegible'),
+    local('Avenir Next'),
+    local('Segoe UI'),
+    local('Helvetica Neue');
+  font-weight: 400 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Kendo Body Local';
+  src:
+    local('Atkinson Hyperlegible Italic'),
+    local('Avenir Next Italic'),
+    local('Segoe UI Italic'),
+    local('Helvetica Neue Italic');
+  font-weight: 400 900;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Kendo Mincho Local';
+  src:
+    local('Zen Old Mincho'),
+    local('BIZ UDPMincho'),
+    local('Hiragino Mincho ProN'),
+    local('Yu Mincho'),
+    local('Songti SC'),
+    local('Georgia');
+  font-weight: 400 900;
+  font-style: normal;
+  font-display: swap;
+}
 
 :root {
   /* Ground: washi paper, defined in OKLCH for perceptual steps. */
@@ -37,9 +73,9 @@
   --shadow-deep: 0 16px 40px color-mix(in oklch, var(--sumi) 18%, transparent);
 
   /* Type system. */
-  --display: 'Zen Old Mincho', 'BIZ UDPMincho', 'Hiragino Mincho ProN', serif;
-  --body: 'Atkinson Hyperlegible', 'Manrope', 'Avenir Next', sans-serif;
-  --kanji: 'BIZ UDPMincho', 'Yu Mincho', serif;
+  --display: 'Kendo Mincho Local', 'Hiragino Mincho ProN', 'Yu Mincho', 'Songti SC', Georgia, serif;
+  --body: 'Kendo Body Local', 'Avenir Next', 'Segoe UI', 'Helvetica Neue', sans-serif;
+  --kanji: 'Kendo Mincho Local', 'BIZ UDPMincho', 'Yu Mincho', serif;
 
   --space-2xs: 0.25rem;
   --space-xs: 0.5rem;
@@ -85,9 +121,18 @@
   box-sizing: border-box;
 }
 
+html {
+  min-height: 100%;
+  -webkit-text-size-adjust: 100%;
+  touch-action: manipulation;
+}
+
 body {
   margin: 0;
   min-width: 320px;
+  min-height: 100%;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
   background-color: var(--washi);
   background-image:
     repeating-linear-gradient(
@@ -113,7 +158,19 @@ body {
 #root {
   width: min(1500px, calc(100% - clamp(1rem, 3vw, 2.5rem)));
   margin: 0 auto;
-  padding: clamp(0.9rem, 2vw, 1.6rem) 0 clamp(2rem, 5vw, 4rem);
+  padding:
+    calc(clamp(0.9rem, 2vw, 1.6rem) + env(safe-area-inset-top))
+    0
+    calc(clamp(2rem, 5vw, 4rem) + env(safe-area-inset-bottom));
+}
+
+button,
+a,
+input,
+select,
+textarea,
+[role='button'] {
+  touch-action: manipulation;
 }
 
 h1,

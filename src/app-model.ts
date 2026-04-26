@@ -19,6 +19,7 @@ export interface TeamEntry {
 export interface MatchTimerState {
   remainingMs: number
   runningSince: number | null
+  phase?: 'regular' | 'encho'
 }
 
 export interface TournamentDraft {

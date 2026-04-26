@@ -2310,6 +2310,26 @@ body.scoreboard-body #root {
   text-align: center;
 }
 
+.match-timer-phase {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.12rem 0.5rem;
+  border: 1px solid color-mix(in oklch, var(--shu) 30%, transparent);
+  border-radius: 999px;
+  color: var(--shu-deep);
+  background: color-mix(in oklch, var(--shu-faint) 68%, transparent);
+  font-size: 0.66rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.match-timer-phase span {
+  font-family: var(--kanji);
+  letter-spacing: 0;
+}
+
 .match-timer.is-expired .match-timer-display {
   color: var(--shu, #c73e1d);
 }
@@ -2393,6 +2413,9 @@ body.scoreboard-body #root {
 }
 
 .scoreboard-clock {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45em;
   font-family: 'Cormorant Garamond', serif;
   font-style: italic;
   font-size: clamp(0.85rem, 1.6vh, 1.1rem);
@@ -2407,6 +2430,14 @@ body.scoreboard-body #root {
 .scoreboard-clock.is-expired {
   color: var(--shu, #c73e1d);
   font-weight: 600;
+}
+
+.scoreboard-clock-phase {
+  font-family: var(--kanji);
+  font-style: normal;
+  font-size: 0.78em;
+  letter-spacing: 0.12em;
+  color: var(--shu-bright);
 }
 
 .timer-expired-block {
@@ -3709,7 +3740,7 @@ input:focus {
 
 .workbench-sticky-stack {
   position: sticky;
-  top: 0;
+  top: env(safe-area-inset-top);
   z-index: 30;
   display: grid;
   gap: var(--space-xs);
@@ -4020,6 +4051,70 @@ input:focus {
   width: 0.92rem;
   height: 0.92rem;
   display: block;
+}
+
+.pwa-update-toast {
+  position: fixed;
+  right: max(var(--space-md), env(safe-area-inset-right));
+  bottom: max(var(--space-md), env(safe-area-inset-bottom));
+  z-index: 260;
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  max-width: min(28rem, calc(100vw - 2rem));
+  padding: var(--space-sm);
+  border: 1px solid color-mix(in oklch, var(--indigo) 36%, var(--rule));
+  border-radius: 0.42rem;
+  background:
+    linear-gradient(90deg, color-mix(in oklch, var(--indigo) 8%, transparent), transparent 64%),
+    var(--washi);
+  box-shadow: var(--shadow-deep);
+}
+
+.pwa-update-toast > div:first-child {
+  display: grid;
+  gap: 0.14rem;
+  min-width: 0;
+}
+
+.pwa-update-toast span {
+  font-size: 0.66rem;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--indigo);
+}
+
+.pwa-update-toast strong {
+  font-size: 0.9rem;
+  line-height: 1.2;
+}
+
+.pwa-update-actions {
+  display: inline-flex;
+  gap: var(--space-xs);
+  flex-shrink: 0;
+}
+
+.pwa-update-actions button {
+  min-height: 2.15rem;
+  padding: 0 var(--space-sm);
+  border: 1px solid var(--rule);
+  border-radius: 0.3rem;
+  background: transparent;
+  color: var(--ink-mid);
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.pwa-update-actions button:first-child {
+  border-color: var(--indigo-deep);
+  background: var(--indigo);
+  color: var(--washi);
+}
+
+.pwa-update-actions button:hover {
+  border-color: var(--sumi);
 }
 
 input[readonly] {
@@ -4388,6 +4483,11 @@ input[readonly] {
   color: var(--ink-faint);
 }
 
+.match-timer:has(.match-timer-phase) {
+  border-color: color-mix(in oklch, var(--shu) 38%, var(--rule));
+  background: color-mix(in oklch, var(--shu-faint) 42%, var(--washi));
+}
+
 .match-timer-display {
   font-family: var(--display);
   font-style: normal;
@@ -4402,6 +4502,27 @@ input[readonly] {
 .match-timer.is-expired {
   border-color: color-mix(in oklch, var(--shu) 56%, transparent);
   background: color-mix(in oklch, var(--shu) 13%, var(--washi));
+}
+
+.encho-note {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid color-mix(in oklch, var(--shu) 24%, transparent);
+  border-radius: 999px;
+  width: fit-content;
+  justify-self: center;
+  color: var(--shu-deep);
+  background: color-mix(in oklch, var(--shu-faint) 62%, transparent);
+  font-size: 0.85rem;
+  font-weight: 900;
+}
+
+.encho-note span {
+  font-family: var(--kanji);
+  font-size: 1rem;
 }
 
 .timer-btn-icon {
@@ -4815,6 +4936,22 @@ body.scoreboard-body {
   .next-bout-strip-btn {
     width: 2.15rem;
     height: 2.15rem;
+  }
+
+  .pwa-update-toast {
+    left: max(0.5rem, env(safe-area-inset-left));
+    right: max(0.5rem, env(safe-area-inset-right));
+    bottom: max(0.5rem, env(safe-area-inset-bottom));
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .pwa-update-actions {
+    width: 100%;
+  }
+
+  .pwa-update-actions button {
+    flex: 1;
   }
 
   .match-scoring-row {
