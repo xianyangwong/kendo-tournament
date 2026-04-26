@@ -104,18 +104,34 @@ function getMatchStateMeta(match: BracketMatch, isProgressing: boolean) {
   }
 }
 
-function scrollToNextBoutCard() {
-  const nextMatchCard = document.querySelector<HTMLElement>('.match-card.is-next-bout')
-  if (!nextMatchCard) return
+function scrollMatchCardIntoView(matchCard: HTMLElement) {
   const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
   const behavior: ScrollBehavior = prefersReducedMotion ? 'auto' : 'smooth'
   const stickyStack = document.querySelector<HTMLElement>('.workbench-sticky-stack')
   const headerOffset = (stickyStack?.getBoundingClientRect().height ?? 0) + 24
-  const cardRect = nextMatchCard.getBoundingClientRect()
+  const cardRect = matchCard.getBoundingClientRect()
   window.scrollTo({
     top: Math.max(0, window.scrollY + cardRect.top - headerOffset),
     behavior,
   })
+}
+
+function scrollToNextBoutCard() {
+  const nextMatchCard = document.querySelector<HTMLElement>('.match-card.is-next-bout')
+  if (!nextMatchCard) return
+  scrollMatchCardIntoView(nextMatchCard)
+}
+
+function scrollToMatchCard(matchId: string) {
+  const matchCard = document.querySelector<HTMLElement>(`.match-card[data-match-id="${matchId}"]`)
+  if (!matchCard) return
+
+  scrollMatchCardIntoView(matchCard)
+  matchCard.classList.remove('is-graph-jump-target')
+  window.setTimeout(() => {
+    matchCard.classList.add('is-graph-jump-target')
+    window.setTimeout(() => matchCard.classList.remove('is-graph-jump-target'), 1400)
+  }, 80)
 }
 
 function getBoutKey(matchId: string, boutIndex: number): string {
@@ -1576,9 +1592,11 @@ function TournamentCard({
 function TournamentGraphModal({
   tournament,
   onClose,
+  onSelectMatch,
 }: {
   tournament: TournamentRecord
   onClose: () => void
+  onSelectMatch?: (matchId: string) => void
 }) {
   const entrants = toTournamentEntrants(tournament.kind, tournament.singles, tournament.teams)
   const bracket = entrants.length >= 2
@@ -1681,11 +1699,16 @@ function TournamentGraphModal({
                                   ? 'next'
                                   : 'pending'
                             return (
-                              <article
+                              <button
                                 key={match.id}
+                                type="button"
                                 className={`bracket-graph-match is-${matchStatus}`}
                                 data-stage-kanji={getMatchStageKanji(match.stage)}
                                 data-has-connector={roundIndex < section.rounds.length - 1 ? 'true' : 'false'}
+                                onClick={() => onSelectMatch?.(match.id)}
+                                disabled={!onSelectMatch}
+                                title={`Jump to ${match.code}`}
+                                aria-label={`Jump to ${match.code}`}
                               >
                                 <span className="bracket-graph-code">{match.code}</span>
                                 <div className="bracket-graph-slot">
@@ -1698,7 +1721,7 @@ function TournamentGraphModal({
                                     {match.right.label}
                                   </span>
                                 </div>
-                              </article>
+                              </button>
                             )
                           })}
                         </div>
@@ -2894,6 +2917,10 @@ function TournamentWorkbench({
         <TournamentGraphModal
           tournament={tournament}
           onClose={() => setGraphOpen(false)}
+          onSelectMatch={(matchId) => {
+            setGraphOpen(false)
+            window.requestAnimationFrame(() => scrollToMatchCard(matchId))
+          }}
         />
       ) : null}
 

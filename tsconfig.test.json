@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2023"],
+    "types": ["node"],
+    "skipLibCheck": true,
+    "strict": true,
+    "outDir": ".tmp-tests",
+    "rootDir": ".",
+    "verbatimModuleSyntax": true
+  },
+  "include": ["src/tournament.ts", "tests/**/*.ts"]
+}

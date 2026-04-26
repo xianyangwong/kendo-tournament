@@ -3482,6 +3482,7 @@ button.is-active {
 }
 
 .bracket-graph-match {
+  appearance: none;
   position: relative;
   display: grid;
   gap: 0.28rem;
@@ -3490,7 +3491,24 @@ button.is-active {
   border: 1px solid var(--rule-soft);
   border-radius: 0.35rem;
   background: color-mix(in oklch, var(--washi-soft) 72%, transparent);
+  color: inherit;
+  font: inherit;
+  text-align: left;
   overflow: visible;
+}
+
+.bracket-graph-match:not(:disabled) {
+  cursor: pointer;
+}
+
+.bracket-graph-match:not(:disabled):hover {
+  border-color: color-mix(in oklch, var(--indigo) 46%, var(--rule));
+  background: color-mix(in oklch, var(--indigo) 8%, var(--washi-soft));
+}
+
+.bracket-graph-match:focus-visible {
+  outline: 2px solid color-mix(in oklch, var(--indigo) 62%, transparent);
+  outline-offset: 3px;
 }
 
 .bracket-graph-match::before {
@@ -4142,6 +4160,24 @@ input[readonly] {
   box-shadow:
     0 0 0 2px color-mix(in oklch, var(--shu) 18%, transparent),
     0 10px 24px color-mix(in oklch, var(--shu) 12%, transparent);
+}
+
+.match-card.is-graph-jump-target {
+  animation: graph-jump-pulse 1.25s ease-out;
+}
+
+@keyframes graph-jump-pulse {
+  0% {
+    border-color: var(--indigo);
+    box-shadow:
+      0 0 0 3px color-mix(in oklch, var(--indigo) 22%, transparent),
+      0 14px 28px color-mix(in oklch, var(--indigo) 14%, transparent);
+  }
+
+  100% {
+    border-color: var(--rule);
+    box-shadow: none;
+  }
 }
 
 .stage-final,
