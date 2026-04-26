@@ -174,6 +174,15 @@ function isTimerExpired(timer: MatchTimerState | undefined, durationSeconds: num
   return getTimerRemainingMs(timer, durationSeconds) <= 0
 }
 
+function hasMatchTimerStarted(
+  matchId: string,
+  timers: Record<string, MatchTimerState> | undefined,
+  kind: TournamentRecord['kind'],
+): boolean {
+  if (kind === 'single') return Boolean(timers?.[matchId])
+  return Object.keys(timers ?? {}).some((key) => key.startsWith(`${matchId}:bout:`))
+}
+
 function formatTimerMs(ms: number): string {
   const total = Math.max(0, Math.ceil(ms / 1000))
   const m = Math.floor(total / 60)
@@ -488,6 +497,77 @@ function removeScoreEventKeysByPrefix(
   )
 }
 
+function ScoreboardLink({
+  href,
+  ready,
+}: {
+  href: string
+  ready: boolean
+}) {
+  if (!ready) {
+    return (
+      <span
+        className="scoreboard-link is-disabled"
+        aria-disabled="true"
+        title="Start the timer to open scoreboard"
+      >
+        ↗ Scoreboard
+      </span>
+    )
+  }
+
+  return (
+    <a
+      className="scoreboard-link"
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      title="Open public scoreboard"
+    >
+      ↗ Scoreboard
+    </a>
+  )
+}
+
+function MatchResetButton({
+  disabled,
+  onClick,
+  label,
+}: {
+  disabled: boolean
+  onClick: () => void
+  label: string
+}) {
+  return (
+    <button
+      type="button"
+      className="score-reset-btn"
+      disabled={disabled}
+      onClick={onClick}
+      title={label}
+      aria-label={label}
+    >
+      <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+        <path
+          d="M3.2 8a4.8 4.8 0 1 0 1.45-3.43"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+        />
+        <path
+          d="M2 2.6v3.6h3.6"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </button>
+  )
+}
+
 function ScorePlate({
   score,
   side,
@@ -706,6 +786,8 @@ function MatchCard({
   const timeExpired = isTimerExpired(timer, durationSeconds)
   const scoringLocked = match.isComplete || timeExpired
   const matchState = getMatchStateMeta(match, !!hasScore || !!timer)
+  const scoreboardReady = !!timer
+  const canResetScore = scoreboardReady || !!hasScore || match.isComplete
 
   return (
     <article
@@ -727,15 +809,17 @@ function MatchCard({
             {matchState.label}
           </span>
           {tournamentId && !match.isAutoAdvance && match.left.entrant && match.right.entrant ? (
-            <a
-              className="scoreboard-link"
+            <ScoreboardLink
               href={`${import.meta.env.BASE_URL}tournaments/${tournamentId}/match/${match.id}/scoreboard`}
-              target="_blank"
-              rel="noreferrer"
-              title="Open public scoreboard"
-            >
-              ↗ Scoreboard
-            </a>
+              ready={scoreboardReady}
+            />
+          ) : null}
+          {canScore ? (
+            <MatchResetButton
+              disabled={!canResetScore}
+              onClick={() => onResetScore?.(match.id)}
+              label="Reset score"
+            />
           ) : null}
         </div>
       </header>
@@ -771,7 +855,7 @@ function MatchCard({
                       <ScorePlate
                         score={score}
                         side={side}
-                        canScore={!!entrant && !scoringLocked}
+                        canScore={!!entrant && scoreboardReady && !scoringLocked}
                         onScore={(amount) => entrant && onAddScore?.(match.id, side, amount)}
                         onUndo={() => entrant && onUndoScore?.(match.id, side)}
                         isLocked={match.isComplete}
@@ -800,15 +884,6 @@ function MatchCard({
                 )}
               </div>
             </div>
-          ) : null}
-          {(hasScore || match.isComplete) ? (
-            <button
-              type="button"
-              className="score-reset-btn ghost-button"
-              onClick={() => onResetScore?.(match.id)}
-            >
-              Reset score
-            </button>
           ) : null}
         </>
       ) : (
@@ -1020,6 +1095,7 @@ function TeamMatchCard({
   const isTiebreaker = stats.leftWins === stats.rightWins && (stats.leftTotal > 0 || stats.rightTotal > 0)
   const showManualSelect = !match.isComplete && stats.pendingBouts === 0 && stats.teamWinner === null && match.options.length > 1
   const matchState = getMatchStateMeta(match, hasAnyScore || hasAnyTimer)
+  const canResetTeamScore = hasAnyTimer || hasAnyScore || match.isComplete
 
   // No members or auto-advance: fall back to click-to-select slot buttons
   if (match.isAutoAdvance || boutsTotal === 0) {
@@ -1095,16 +1171,16 @@ function TeamMatchCard({
             {matchState.label}
           </span>
           {tournamentId && match.left.entrant && match.right.entrant ? (
-            <a
-              className="scoreboard-link"
+            <ScoreboardLink
               href={`${import.meta.env.BASE_URL}tournaments/${tournamentId}/match/${match.id}/scoreboard`}
-              target="_blank"
-              rel="noreferrer"
-              title="Open public scoreboard"
-            >
-              ↗ Scoreboard
-            </a>
+              ready={hasAnyTimer}
+            />
           ) : null}
+          <MatchResetButton
+            disabled={!canResetTeamScore}
+            onClick={() => onResetTeamScore(match.id)}
+            label="Reset scorecard"
+          />
         </div>
       </header>
 
@@ -1188,6 +1264,7 @@ function TeamMatchCard({
           const boutTimer = timers[boutKey]
           const boutTimeExpired = isTimerExpired(boutTimer, durationSeconds)
           const boutLocked = boutDone || boutTimeExpired
+          const boutTimerStarted = !!boutTimer
 
           return (
             <div key={boutIndex} className={`bout-row${boutTimeExpired && !boutDone ? ' is-time-draw' : ''}`}>
@@ -1211,7 +1288,7 @@ function TeamMatchCard({
                   <ScorePlate
                     score={boutScore.left}
                     side="left"
-                    canScore={!boutLocked}
+                    canScore={boutTimerStarted && !boutLocked}
                     onScore={(amount) => onAddBoutScore(match.id, boutIndex, 'left', amount)}
                     onUndo={() => onUndoBoutScore(match.id, boutIndex, 'left')}
                   />
@@ -1224,7 +1301,7 @@ function TeamMatchCard({
                   <ScorePlate
                     score={boutScore.right}
                     side="right"
-                    canScore={!boutLocked}
+                    canScore={boutTimerStarted && !boutLocked}
                     onScore={(amount) => onAddBoutScore(match.id, boutIndex, 'right', amount)}
                     onUndo={() => onUndoBoutScore(match.id, boutIndex, 'right')}
                   />
@@ -1280,15 +1357,6 @@ function TeamMatchCard({
         </div>
       ) : null}
 
-      {(hasAnyScore || match.isComplete) ? (
-        <button
-          type="button"
-          className="score-reset-btn ghost-button"
-          onClick={() => onResetTeamScore(match.id)}
-        >
-          Reset scorecard
-        </button>
-      ) : null}
     </article>
   )
 }
@@ -1502,6 +1570,154 @@ function TournamentCard({
         </div>
       </footer>
     </article>
+  )
+}
+
+function TournamentGraphModal({
+  tournament,
+  onClose,
+}: {
+  tournament: TournamentRecord
+  onClose: () => void
+}) {
+  const entrants = toTournamentEntrants(tournament.kind, tournament.singles, tournament.teams)
+  const bracket = entrants.length >= 2
+    ? buildTournamentBracket(entrants, tournament.format, tournament.results)
+    : null
+  const nextPendingMatch = bracket
+    ? getNextPendingMatch([
+        ...bracket.winnersRounds,
+        ...bracket.losersRounds,
+        ...bracket.finalRounds,
+      ])
+    : null
+  const insight = getTournamentInsight(tournament)
+  const sections = bracket
+    ? [
+        { id: 'winners', title: 'Winners bracket', rounds: bracket.winnersRounds },
+        { id: 'losers', title: 'Losers bracket', rounds: bracket.losersRounds },
+        { id: 'finals', title: 'Finals', rounds: bracket.finalRounds },
+      ].filter((section) => section.rounds.length > 0)
+    : []
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') onClose()
+    }
+
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [onClose])
+
+  return (
+    <div className="graph-modal-overlay" onClick={onClose}>
+      <section
+        className="graph-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="graph-modal-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <header className="graph-modal-header">
+          <div>
+            <p className="eyebrow">
+              <span className="kanji-kicker">{getTournamentKindKanji(tournament.kind)}</span>
+              Bracket graph
+            </p>
+            <h2 id="graph-modal-title">{tournament.name}</h2>
+          </div>
+          <button
+            type="button"
+            className="settings-close-btn"
+            onClick={onClose}
+            aria-label="Close bracket graph"
+          >
+            ✕
+          </button>
+        </header>
+
+        <div className="graph-modal-summary" aria-label="Tournament summary">
+          <div>
+            <span>Format</span>
+            <strong>{tournament.format === 'single' ? 'Single knockout' : 'Double knockout'}</strong>
+          </div>
+          <div>
+            <span>Entrants</span>
+            <strong>{insight.entrants}</strong>
+          </div>
+          <div>
+            <span>{insight.isComplete ? 'Champion' : 'Next'}</span>
+            <strong>{insight.isComplete ? insight.champion ?? 'Undecided' : insight.nextMatch ?? 'TBD'}</strong>
+          </div>
+        </div>
+
+        <div className="graph-modal-body">
+          {!bracket ? (
+            <div className="graph-empty">
+              <strong>Bracket not ready</strong>
+              <span>Add at least two entrants to generate the graph.</span>
+            </div>
+          ) : (
+            sections.map((section) => (
+              <section key={section.id} className="bracket-graph-section">
+                <div className="section-heading">
+                  <p>{section.title}</p>
+                </div>
+                <div className="bracket-graph-scroll">
+                  <div className="bracket-graph-grid">
+                    {section.rounds.map((round, roundIndex) => (
+                      <div key={round.id} className="bracket-graph-round">
+                        <header className="bracket-graph-round-header">
+                          <strong>{round.title}</strong>
+                          <span>{round.subtitle}</span>
+                        </header>
+                        <div className="bracket-graph-matches">
+                          {round.matches.map((match) => {
+                            const matchStatus = match.isAutoAdvance
+                              ? 'bye'
+                              : match.isComplete
+                                ? 'complete'
+                                : match.id === nextPendingMatch?.id
+                                  ? 'next'
+                                  : 'pending'
+                            return (
+                              <article
+                                key={match.id}
+                                className={`bracket-graph-match is-${matchStatus}`}
+                                data-stage-kanji={getMatchStageKanji(match.stage)}
+                                data-has-connector={roundIndex < section.rounds.length - 1 ? 'true' : 'false'}
+                              >
+                                <span className="bracket-graph-code">{match.code}</span>
+                                <div className="bracket-graph-slot">
+                                  <span className={match.selectedWinnerId === match.left.entrant?.id ? 'is-winner' : ''}>
+                                    {match.left.label}
+                                  </span>
+                                </div>
+                                <div className="bracket-graph-slot">
+                                  <span className={match.selectedWinnerId === match.right.entrant?.id ? 'is-winner' : ''}>
+                                    {match.right.label}
+                                  </span>
+                                </div>
+                              </article>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                    {bracket.champion && section.id === 'finals' ? (
+                      <div className="bracket-graph-champion">
+                        <span aria-hidden="true">優勝</span>
+                        <strong>{bracket.champion.label}</strong>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              </section>
+            ))
+          )}
+        </div>
+      </section>
+    </div>
   )
 }
 
@@ -2111,13 +2327,16 @@ function TournamentWorkbench({
     onChange((current) => {
       const remainingScores = { ...(current.scores ?? {}) }
       const remainingResults = { ...current.results }
+      const remainingTimers = { ...(current.timers ?? {}) }
       delete remainingScores[matchId]
       delete remainingResults[matchId]
+      delete remainingTimers[matchId]
       return {
         ...current,
         scores: remainingScores,
         scoreEvents: removeScoreEventKey(current.scoreEvents, matchId),
         results: remainingResults,
+        timers: remainingTimers,
         updatedAt: new Date().toISOString(),
       }
     })
@@ -2249,6 +2468,9 @@ function TournamentWorkbench({
       const nextScores = Object.fromEntries(
         Object.entries(current.scores ?? {}).filter(([key]) => !key.startsWith(`${matchId}:bout:`)),
       )
+      const nextTimers = Object.fromEntries(
+        Object.entries(current.timers ?? {}).filter(([key]) => key !== matchId && !key.startsWith(`${matchId}:bout:`)),
+      )
       const remainingResults = { ...current.results }
       delete remainingResults[matchId]
       return {
@@ -2256,6 +2478,7 @@ function TournamentWorkbench({
         scores: nextScores,
         scoreEvents: removeScoreEventKeysByPrefix(current.scoreEvents, `${matchId}:bout:`),
         results: remainingResults,
+        timers: nextTimers,
         updatedAt: new Date().toISOString(),
       }
     })
@@ -2450,10 +2673,14 @@ function TournamentWorkbench({
   })()
 
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [graphOpen, setGraphOpen] = useState(false)
   const nextBoutScoreboardHref =
     nextPendingMatch?.left.entrant && nextPendingMatch.right.entrant
       ? `${import.meta.env.BASE_URL}tournaments/${tournament.id}/match/${nextPendingMatch.id}/scoreboard`
       : null
+  const nextBoutScoreboardReady = nextPendingMatch
+    ? hasMatchTimerStarted(nextPendingMatch.id, tournament.timers, tournament.kind)
+    : false
   const nextBoutStripInfo = nextPendingMatch ? getNextBoutStripInfo(tournament, nextPendingMatch) : null
 
   useEffect(() => {
@@ -2563,6 +2790,31 @@ function TournamentWorkbench({
               ) : null}
               <button
                 type="button"
+                className="bracket-graph-btn"
+                onClick={() => setGraphOpen(true)}
+                title="View bracket graph"
+                aria-label="View bracket graph"
+              >
+                <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                  <path
+                    d="M2.4 3.2h3.2v2.4H2.4zM2.4 10.4h3.2v2.4H2.4zM10.4 6.8h3.2v2.4h-3.2z"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.2"
+                    strokeLinejoin="round"
+                  />
+                  <path
+                    d="M5.6 4.4h1.6v3.6h3.2M5.6 11.6h1.6V8h3.2"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
+              <button
+                type="button"
                 className="settings-icon-btn"
                 onClick={() => setSettingsOpen(true)}
                 title="Tournament settings"
@@ -2604,7 +2856,7 @@ function TournamentWorkbench({
                   <path d="M4.7 8.9 8 12.2l3.3-3.3" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </button>
-              {nextBoutScoreboardHref ? (
+              {nextBoutScoreboardHref && nextBoutScoreboardReady ? (
                 <a
                   className="next-bout-strip-btn"
                   href={nextBoutScoreboardHref}
@@ -2619,11 +2871,31 @@ function TournamentWorkbench({
                     <path d="m7.4 8.6 5-5" fill="none" stroke="currentColor" strokeWidth="1.55" strokeLinecap="round" />
                   </svg>
                 </a>
+              ) : nextBoutScoreboardHref ? (
+                <span
+                  className="next-bout-strip-btn is-disabled"
+                  aria-disabled="true"
+                  title="Start the timer to open scoreboard"
+                  aria-label="Scoreboard unavailable until timer starts"
+                >
+                  <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                    <path d="M5.2 4.2H3.4v8.4h8.4v-1.8" fill="none" stroke="currentColor" strokeWidth="1.55" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M8.1 3.4h4.5v4.5" fill="none" stroke="currentColor" strokeWidth="1.55" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="m7.4 8.6 5-5" fill="none" stroke="currentColor" strokeWidth="1.55" strokeLinecap="round" />
+                  </svg>
+                </span>
               ) : null}
             </div>
           </section>
         ) : null}
       </div>
+
+      {graphOpen ? (
+        <TournamentGraphModal
+          tournament={tournament}
+          onClose={() => setGraphOpen(false)}
+        />
+      ) : null}
 
       {/* Settings drawer */}
       {settingsOpen ? (

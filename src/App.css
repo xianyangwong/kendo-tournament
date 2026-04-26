@@ -562,7 +562,8 @@
 }
 
 .reset-bracket-btn,
-.delete-tournament-btn {
+.delete-tournament-btn,
+.bracket-graph-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -597,8 +598,21 @@
   color: var(--shu-deep);
 }
 
+.bracket-graph-btn {
+  border-color: color-mix(in oklch, var(--indigo) 30%, transparent);
+  background: color-mix(in oklch, var(--indigo) 6%, transparent);
+  color: var(--indigo);
+}
+
+.bracket-graph-btn:hover {
+  border-color: var(--indigo-deep);
+  background: color-mix(in oklch, var(--indigo) 13%, var(--washi));
+  color: var(--indigo-deep);
+}
+
 .reset-bracket-btn svg,
-.delete-tournament-btn svg {
+.delete-tournament-btn svg,
+.bracket-graph-btn svg {
   width: 0.95rem;
   height: 0.95rem;
   display: block;
@@ -1487,12 +1501,40 @@ button.is-active {
 }
 
 .score-reset-btn {
-  width: 100%;
-  font-size: 0.78rem;
-  padding: 0.4rem 0.6rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  min-height: 2rem;
+  padding: 0;
+  border: 1px solid color-mix(in oklch, var(--shu) 38%, transparent);
+  border-radius: 0.28rem;
+  background: var(--shu-faint);
+  color: var(--shu-deep);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 140ms ease, border-color 140ms ease, color 140ms ease, opacity 140ms ease;
+}
+
+.score-reset-btn:hover:not(:disabled) {
+  border-color: var(--shu-deep);
+  background: var(--shu);
+  color: var(--washi);
+}
+
+.score-reset-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.38;
+  border-color: var(--rule-soft);
+  background: transparent;
   color: var(--ink-soft);
-  text-align: center;
-  border-radius: 0.2rem;
+}
+
+.score-reset-btn svg {
+  width: 0.95rem;
+  height: 0.95rem;
+  display: block;
 }
 
 .not-found-card {
@@ -1860,6 +1902,16 @@ button.is-active {
 .scoreboard-link:hover {
   background: var(--shu, #c73e1d);
   color: var(--washi, #f1e7d2);
+}
+
+.scoreboard-link.is-disabled,
+.scoreboard-link.is-disabled:hover {
+  cursor: not-allowed;
+  opacity: 0.42;
+  border-color: var(--rule-soft);
+  background: transparent;
+  color: var(--ink-soft);
+  transform: none;
 }
 
 
@@ -3265,6 +3317,279 @@ button.is-active {
   color: var(--washi);
 }
 
+.graph-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 220;
+  display: grid;
+  place-items: center;
+  padding: var(--space-md);
+  background: color-mix(in oklch, var(--sumi) 44%, transparent);
+  backdrop-filter: blur(2px);
+}
+
+.graph-modal {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  width: min(72rem, 100%);
+  max-height: calc(100vh - 2rem);
+  border: 1px solid var(--rule);
+  border-radius: 0.5rem;
+  background:
+    linear-gradient(180deg, color-mix(in oklch, var(--washi) 48%, transparent), transparent 42%),
+    var(--washi);
+  box-shadow: 0 18px 44px color-mix(in oklch, var(--sumi) 28%, transparent);
+  overflow: hidden;
+}
+
+.graph-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding: var(--space-lg);
+  border-bottom: 1px solid var(--rule);
+}
+
+.graph-modal-header h2 {
+  margin-top: var(--space-xs);
+  font-family: var(--display);
+  font-size: clamp(1.6rem, 3vw, 2.35rem);
+  font-weight: 900;
+  line-height: 1;
+  color: var(--sumi);
+}
+
+.graph-modal-header .kanji-kicker {
+  display: inline-block;
+  margin-right: 0.45rem;
+}
+
+.graph-modal-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-bottom: 1px solid var(--rule-soft);
+}
+
+.graph-modal-summary div {
+  display: grid;
+  gap: 0.2rem;
+  padding: var(--space-sm) var(--space-lg);
+}
+
+.graph-modal-summary div + div {
+  border-left: 1px solid var(--rule-soft);
+}
+
+.graph-modal-summary span {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.graph-modal-summary strong {
+  font-family: var(--display);
+  font-size: 1.25rem;
+  font-weight: 900;
+  line-height: 1;
+  color: var(--sumi);
+}
+
+.graph-modal-body {
+  overflow: auto;
+  display: grid;
+  align-content: start;
+  gap: var(--space-lg);
+  padding: var(--space-lg);
+}
+
+.graph-empty {
+  display: grid;
+  gap: var(--space-xs);
+  min-height: 13rem;
+  align-content: center;
+  justify-items: start;
+  color: var(--ink-soft);
+}
+
+.graph-empty strong {
+  font-family: var(--display);
+  font-size: 1.6rem;
+  color: var(--sumi);
+}
+
+.bracket-graph-section {
+  display: grid;
+  align-content: start;
+  gap: var(--space-sm);
+}
+
+.bracket-graph-scroll {
+  overflow-x: auto;
+  padding: var(--space-xs) 0 var(--space-sm);
+}
+
+.bracket-graph-grid {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(11rem, 13rem);
+  align-items: center;
+  gap: 2rem;
+  width: max-content;
+  min-width: 100%;
+}
+
+.bracket-graph-round {
+  display: grid;
+  gap: var(--space-sm);
+  min-width: 0;
+}
+
+.bracket-graph-round-header {
+  display: grid;
+  gap: 0.15rem;
+  min-height: 2.5rem;
+  padding-bottom: var(--space-xs);
+  border-bottom: 1px solid var(--rule-soft);
+}
+
+.bracket-graph-round-header strong {
+  font-size: 0.86rem;
+  font-weight: 900;
+  color: var(--sumi);
+}
+
+.bracket-graph-round-header span {
+  font-size: 0.72rem;
+  color: var(--ink-soft);
+}
+
+.bracket-graph-matches {
+  display: grid;
+  gap: var(--space-sm);
+}
+
+.bracket-graph-round:nth-child(2) .bracket-graph-matches {
+  gap: var(--space-lg);
+  padding-block: var(--space-sm);
+}
+
+.bracket-graph-round:nth-child(3) .bracket-graph-matches {
+  gap: var(--space-xl);
+  padding-block: var(--space-lg);
+}
+
+.bracket-graph-match {
+  position: relative;
+  display: grid;
+  gap: 0.28rem;
+  min-height: 5.5rem;
+  padding: var(--space-xs);
+  border: 1px solid var(--rule-soft);
+  border-radius: 0.35rem;
+  background: color-mix(in oklch, var(--washi-soft) 72%, transparent);
+  overflow: visible;
+}
+
+.bracket-graph-match::before {
+  content: attr(data-stage-kanji);
+  position: absolute;
+  right: 0.36rem;
+  bottom: -0.26em;
+  font-family: var(--kanji);
+  font-size: 2.4rem;
+  font-weight: 900;
+  line-height: 1;
+  color: color-mix(in oklch, var(--sumi) 6%, transparent);
+  pointer-events: none;
+}
+
+.bracket-graph-match[data-has-connector='true']::after {
+  content: '';
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  width: 2rem;
+  border-top: 1px solid color-mix(in oklch, var(--sumi) 24%, transparent);
+}
+
+.bracket-graph-match.is-next {
+  border-color: color-mix(in oklch, var(--shu) 58%, var(--rule));
+  background: color-mix(in oklch, var(--shu-faint) 52%, var(--washi));
+}
+
+.bracket-graph-match.is-complete {
+  border-color: color-mix(in oklch, var(--moss) 42%, var(--rule));
+}
+
+.bracket-graph-match.is-bye {
+  opacity: 0.72;
+}
+
+.bracket-graph-code {
+  width: fit-content;
+  padding: 0.1rem 0.34rem;
+  border: 1px solid color-mix(in oklch, var(--shu) 28%, transparent);
+  border-radius: 999px;
+  font-size: 0.66rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  color: var(--shu-deep);
+  background: color-mix(in oklch, var(--washi) 74%, transparent);
+}
+
+.bracket-graph-slot {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  padding: 0.22rem 0.35rem;
+  border: 1px solid var(--rule-soft);
+  border-radius: 0.2rem;
+  background: color-mix(in oklch, var(--washi) 58%, transparent);
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: var(--sumi);
+}
+
+.bracket-graph-slot span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bracket-graph-slot .is-winner {
+  color: var(--moss);
+}
+
+.bracket-graph-champion {
+  align-self: center;
+  display: grid;
+  justify-items: center;
+  gap: var(--space-xs);
+  min-width: 10rem;
+  padding: var(--space-md);
+  border: 1px solid color-mix(in oklch, var(--shu) 34%, var(--rule));
+  border-radius: 0.4rem;
+  background: color-mix(in oklch, var(--shu-faint) 45%, var(--washi));
+}
+
+.bracket-graph-champion span {
+  font-family: var(--kanji);
+  font-weight: 900;
+  color: var(--shu-deep);
+}
+
+.bracket-graph-champion strong {
+  text-align: center;
+  font-family: var(--display);
+  font-size: 1.35rem;
+  font-weight: 900;
+  color: var(--sumi);
+}
+
 .empty-card {
   min-height: 13rem;
   align-content: center;
@@ -3486,7 +3811,8 @@ input:focus {
 }
 
 .reset-bracket-btn,
-.delete-tournament-btn {
+.delete-tournament-btn,
+.bracket-graph-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3521,8 +3847,21 @@ input:focus {
   color: var(--shu-deep);
 }
 
+.bracket-graph-btn {
+  border-color: color-mix(in oklch, var(--indigo) 34%, var(--rule));
+  background: color-mix(in oklch, var(--indigo) 7%, var(--washi-soft));
+  color: var(--indigo);
+}
+
+.bracket-graph-btn:hover {
+  border-color: var(--indigo-deep);
+  background: color-mix(in oklch, var(--indigo) 14%, var(--washi));
+  color: var(--indigo-deep);
+}
+
 .reset-bracket-btn svg,
-.delete-tournament-btn svg {
+.delete-tournament-btn svg,
+.bracket-graph-btn svg {
   width: 0.95rem;
   height: 0.95rem;
   display: block;
@@ -3648,6 +3987,15 @@ input:focus {
   border-color: var(--shu-deep);
   background: var(--shu-deep);
   color: var(--washi);
+}
+
+.next-bout-strip-btn.is-disabled,
+.next-bout-strip-btn.is-disabled:hover {
+  cursor: not-allowed;
+  opacity: 0.42;
+  border-color: var(--rule);
+  background: color-mix(in oklch, var(--washi-soft) 56%, transparent);
+  color: var(--ink-soft);
 }
 
 .next-bout-strip-btn svg {
@@ -4284,6 +4632,7 @@ body.scoreboard-body {
   .workbench-back-btn,
   .reset-bracket-btn,
   .delete-tournament-btn,
+  .bracket-graph-btn,
   .settings-icon-btn {
     width: 2.35rem;
     height: 2.35rem;
@@ -4310,6 +4659,52 @@ body.scoreboard-body {
 
   .home-status-tile + .home-status-tile {
     border-top: 1px solid var(--rule-soft);
+  }
+
+  .graph-modal-overlay {
+    padding: 0;
+    place-items: stretch;
+  }
+
+  .graph-modal {
+    width: 100%;
+    max-height: 100dvh;
+    border-radius: 0;
+    border-inline: 0;
+  }
+
+  .graph-modal-header {
+    padding: var(--space-md);
+  }
+
+  .graph-modal-header h2 {
+    font-size: clamp(1.35rem, 7vw, 1.9rem);
+  }
+
+  .graph-modal-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .graph-modal-summary div {
+    padding: var(--space-sm) var(--space-md);
+  }
+
+  .graph-modal-summary div + div {
+    border-left: 0;
+    border-top: 1px solid var(--rule-soft);
+  }
+
+  .graph-modal-body {
+    padding: var(--space-md);
+  }
+
+  .bracket-graph-grid {
+    grid-auto-columns: minmax(10rem, 11.5rem);
+    gap: 1.45rem;
+  }
+
+  .bracket-graph-match[data-has-connector='true']::after {
+    width: 1.45rem;
   }
 
   .tournament-card-footer,

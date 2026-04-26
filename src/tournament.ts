@@ -188,7 +188,7 @@ function buildMatch(
 
 /**
  * Compact single-elimination bracket. Each round pairs as many entrants as
- * possible; if the count is odd, the top remaining seed gets a BYE that round
+ * possible; if the count is odd, the bottom remaining seed gets a BYE that round
  * and advances directly. By default this keeps the bracket dense — no empty
  * cards, at most one BYE per round — instead of inflating to the next power of
  * two. Double knockout can opt into showing those BYE advances as match cards
@@ -220,11 +220,11 @@ function buildCompactWinnersBracket(
     const slotsForRound: MatchSlot[] = []
     let byeSlot: MatchSlot | null = null
 
-    // If odd number of entrants this round, the top seed (first slot) gets a
-    // bye. Pair the remainder sequentially.
+    // If odd, carry the bottom slot as the BYE so adjacent winners feed forward
+    // visually: W1M1 + W1M2 -> W2M1, with the leftover as the visible BYE card.
     if (currentSlots.length % 2 === 1) {
-      byeSlot = currentSlots[0]
-      slotsForRound.push(...currentSlots.slice(1))
+      byeSlot = currentSlots[currentSlots.length - 1]
+      slotsForRound.push(...currentSlots.slice(0, -1))
     } else {
       slotsForRound.push(...currentSlots)
     }
@@ -265,11 +265,10 @@ function buildCompactWinnersBracket(
       matches: visibleMatches,
     })
 
-    // Top seed (with bye) advances first, preserving seed order for next round
     const winners = matches.map((match) => match.winnerSlot)
     currentSlots = byeMatch
-      ? [byeMatch.winnerSlot, ...winners]
-      : (byeSlot ? [byeSlot, ...winners] : winners)
+      ? [...winners, byeMatch.winnerSlot]
+      : (byeSlot ? [...winners, byeSlot] : winners)
   }
 
   return {
