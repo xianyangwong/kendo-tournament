@@ -361,6 +361,159 @@
   display: block;
 }
 
+.docs-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(18rem, 26rem);
+  align-items: end;
+  gap: var(--space-xl);
+  padding: var(--space-lg) 0 var(--space-sm);
+  border-bottom: 1px solid var(--rule-soft);
+}
+
+.docs-hero h1 {
+  max-width: 11ch;
+  font-size: clamp(2.8rem, 6vw, 5.6rem);
+  line-height: 0.92;
+}
+
+.docs-hero-note {
+  display: grid;
+  gap: 0.45rem;
+  padding: 1rem;
+  border: 1px solid var(--rule-soft);
+  border-radius: 0.3rem;
+  background: color-mix(in oklch, var(--washi-soft) 78%, transparent);
+  box-shadow: var(--shadow-paper);
+}
+
+.docs-hero-note span,
+.docs-step-number {
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.28em;
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
+.docs-hero-note strong {
+  font-family: var(--display);
+  font-size: 1.65rem;
+  line-height: 1;
+}
+
+.docs-hero-note p,
+.docs-hero-note a {
+  color: var(--ink-mid);
+}
+
+.docs-jump-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.docs-jump-list a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 2.55rem;
+  padding: 0.5rem 0.72rem;
+  border: 1px solid var(--rule-soft);
+  border-radius: 0.25rem;
+  color: var(--sumi);
+  text-decoration: none;
+  background: color-mix(in oklch, var(--washi-soft) 68%, transparent);
+  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+}
+
+.docs-jump-list a:hover {
+  border-color: var(--shu);
+  background: var(--washi-soft);
+  transform: translateY(-1px);
+}
+
+.docs-jump-list span {
+  font-family: var(--display);
+  color: var(--shu-deep);
+}
+
+.docs-step-list {
+  display: grid;
+  gap: var(--space-xl);
+}
+
+.docs-step {
+  display: grid;
+  grid-template-columns: minmax(18rem, 0.72fr) minmax(0, 1.28fr);
+  gap: var(--space-lg);
+  align-items: start;
+  scroll-margin-top: 2rem;
+  padding: var(--space-lg);
+  border: 1px solid var(--rule-soft);
+  border-radius: 0.35rem;
+  background: var(--washi-soft);
+  box-shadow: var(--shadow-paper);
+}
+
+.docs-step-copy {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.docs-step-copy h2 {
+  font-size: clamp(1.65rem, 2.5vw, 2.4rem);
+}
+
+.docs-step-copy p,
+.docs-step-copy li,
+.docs-deploy-note p {
+  color: var(--ink-mid);
+}
+
+.docs-step-copy ul {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding-left: 1.15rem;
+}
+
+.docs-step-copy li::marker {
+  color: var(--shu);
+}
+
+.docs-step-figure {
+  margin: 0;
+  border: 1px solid var(--rule);
+  border-radius: 0.28rem;
+  overflow: hidden;
+  background: var(--washi-deep);
+}
+
+.docs-step-figure img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.docs-deploy-note {
+  display: grid;
+  grid-template-columns: minmax(12rem, 0.42fr) minmax(0, 1fr);
+  gap: var(--space-lg);
+  align-items: start;
+  padding: var(--space-lg);
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule-soft);
+}
+
+.docs-deploy-note code {
+  padding: 0.06rem 0.25rem;
+  border: 1px solid var(--rule-soft);
+  border-radius: 0.18rem;
+  background: color-mix(in oklch, var(--washi-deep) 55%, transparent);
+  color: var(--sumi);
+}
+
 .wizard-layout {
   display: grid;
   grid-template-columns: 1fr;
@@ -4718,6 +4871,12 @@ body.scoreboard-body {
     align-items: start;
   }
 
+  .docs-hero,
+  .docs-step,
+  .docs-deploy-note {
+    grid-template-columns: 1fr;
+  }
+
   .workbench-header {
     grid-template-columns: auto minmax(0, 1fr);
     align-items: start;
@@ -4748,6 +4907,33 @@ body.scoreboard-body {
 }
 
 @media (max-width: 720px) {
+  .docs-hero {
+    gap: var(--space-md);
+    padding-top: var(--space-sm);
+  }
+
+  .docs-hero h1 {
+    max-width: 100%;
+    font-size: clamp(2.25rem, 13vw, 3.5rem);
+  }
+
+  .docs-jump-list {
+    flex-direction: column;
+  }
+
+  .docs-jump-list a {
+    width: 100%;
+  }
+
+  .docs-step {
+    gap: var(--space-md);
+    padding: var(--space-md);
+  }
+
+  .docs-deploy-note {
+    padding: var(--space-md) 0;
+  }
+
   .workbench-sticky-stack {
     gap: 0.32rem;
   }

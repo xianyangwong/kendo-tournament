@@ -38,6 +38,113 @@ import {
   toTournamentEntrants,
 } from './app-model'
 
+const DOC_SCREENSHOTS = {
+  home: new URL('../docs/screenshots/01-home.png', import.meta.url).href,
+  basics: new URL('../docs/screenshots/02-basics.png', import.meta.url).href,
+  entrants: new URL('../docs/screenshots/03-entrants.png', import.meta.url).href,
+  review: new URL('../docs/screenshots/04-review.png', import.meta.url).href,
+  bracket: new URL('../docs/screenshots/05-live-bracket.png', import.meta.url).href,
+  scoring: new URL('../docs/screenshots/06-score-match.png', import.meta.url).href,
+  graph: new URL('../docs/screenshots/07-bracket-graph.png', import.meta.url).href,
+  saved: new URL('../docs/screenshots/08-home-active.png', import.meta.url).href,
+} as const
+
+const DOC_STEPS = [
+  {
+    id: 'open-desk',
+    title: 'Open the tournament desk',
+    body: 'Start on the tournament desk. Saved tournaments are grouped into Active, Queued, and Archived tabs.',
+    bullets: [
+      'Active tournaments have at least one result but no champion yet.',
+      'Queued tournaments are created but not started.',
+      'Archived tournaments already have a champion.',
+    ],
+    image: DOC_SCREENSHOTS.home,
+    alt: 'Tournament desk home screen',
+  },
+  {
+    id: 'basics',
+    title: 'Enter tournament basics',
+    body: 'Create a new tournament, then set the name, event type, knockout format, and match time.',
+    bullets: [
+      'Use Single tournament for individual kendoka.',
+      'Use Team tournament for team shiai.',
+      'Match time accepts seconds or m:ss format.',
+    ],
+    image: DOC_SCREENSHOTS.basics,
+    alt: 'Tournament basics setup step',
+  },
+  {
+    id: 'entrants',
+    title: 'Add entrants',
+    body: 'Add competitors for a single tournament, or add teams and team members for a team tournament.',
+    bullets: [
+      'Use Add competitor or Add team when you need more rows.',
+      'Use Remove to delete a row before the bracket starts.',
+      'Team member order becomes the roster order used for bout lineups.',
+    ],
+    image: DOC_SCREENSHOTS.entrants,
+    alt: 'Entrants step with sample competitors',
+  },
+  {
+    id: 'review',
+    title: 'Review and create',
+    body: 'Check the summary before saving. The review step shows the tournament name, type, format, entrant count, and entrant list.',
+    bullets: [
+      'You need at least two entrants before creating a tournament.',
+      'Select Create tournament to save the bracket and open the workbench.',
+    ],
+    image: DOC_SCREENSHOTS.review,
+    alt: 'Review tournament setup step',
+  },
+  {
+    id: 'run-bracket',
+    title: 'Run the live bracket',
+    body: 'The tournament workbench shows the next bout, bracket controls, match cards, timers, and scoring controls.',
+    bullets: [
+      'The next pending match is highlighted.',
+      'Start a match timer before adding scores.',
+      'Use settings before the bracket starts if you need to adjust entrants or format.',
+    ],
+    image: DOC_SCREENSHOTS.bracket,
+    alt: 'Live bracket workbench',
+  },
+  {
+    id: 'score',
+    title: 'Score matches',
+    body: 'Use each match card to run time and award points. When a result is decided, the winner advances automatically.',
+    bullets: [
+      'Use +1 or +1/2 to award points.',
+      'Use undo to remove the last score event for that side.',
+      'Locked-in matches can be reset with the match reset control.',
+    ],
+    image: DOC_SCREENSHOTS.scoring,
+    alt: 'Scored match and bracket advancement',
+  },
+  {
+    id: 'graph',
+    title: 'View the bracket graph',
+    body: 'Open the bracket graph from the top-right controls for a compact overview of the bracket.',
+    bullets: [
+      'The graph shows match codes, current entrants, and pending matches.',
+      'Select a match in the graph to jump back to that match card.',
+    ],
+    image: DOC_SCREENSHOTS.graph,
+    alt: 'Bracket graph overview',
+  },
+  {
+    id: 'saved',
+    title: 'Return to saved tournaments',
+    body: 'Use the back button to return to the tournament desk. Tournaments stay saved in the same browser through local storage.',
+    bullets: [
+      'Select a tournament card to reopen it.',
+      'Use the delete control on a card to remove it from local storage.',
+    ],
+    image: DOC_SCREENSHOTS.saved,
+    alt: 'Tournament desk with a saved active tournament',
+  },
+] as const
+
 function getNextPendingMatch(rounds: BracketRound[]): BracketMatch | null {
   for (const round of rounds) {
     for (const match of round.matches) {
@@ -1808,9 +1915,14 @@ function HomePage({
   return (
     <AppFrame
       action={
-        <Link to="/tournaments/new" className="primary-link">
-          Create new tournament
-        </Link>
+        <>
+          <Link to="/docs" className="inline-link">
+            Docs
+          </Link>
+          <Link to="/tournaments/new" className="primary-link">
+            Create new tournament
+          </Link>
+        </>
       }
     >
       <section className="home-header">
@@ -1857,6 +1969,89 @@ function HomePage({
             <p>{emptyCopy.p}</p>
           </div>
         )}
+      </section>
+    </AppFrame>
+  )
+}
+
+function DocsPage() {
+  return (
+    <AppFrame
+      action={
+        <>
+          <Link to="/" className="inline-link">
+            Tournament desk
+          </Link>
+          <Link to="/tournaments/new" className="primary-link">
+            Create new tournament
+          </Link>
+        </>
+      }
+    >
+      <section className="docs-hero">
+        <div>
+          <p className="eyebrow">Website documentation</p>
+          <h1>How to use Shiai Desk</h1>
+        </div>
+        <div className="docs-hero-note">
+          <span>Public route</span>
+          <strong>/docs</strong>
+          <p>
+            On GitHub Pages, this guide is available at
+            {' '}
+            <a href="https://xianyangwong.github.io/kendo-tournament/docs">
+              xianyangwong.github.io/kendo-tournament/docs
+            </a>
+            .
+          </p>
+        </div>
+      </section>
+
+      <nav className="docs-jump-list" aria-label="Guide steps">
+        {DOC_STEPS.map((step, index) => (
+          <a key={step.id} href={`#${step.id}`}>
+            <span>{String(index + 1).padStart(2, '0')}</span>
+            {step.title}
+          </a>
+        ))}
+      </nav>
+
+      <section className="docs-step-list">
+        {DOC_STEPS.map((step, index) => (
+          <article key={step.id} id={step.id} className="docs-step">
+            <div className="docs-step-copy">
+              <span className="docs-step-number">{String(index + 1).padStart(2, '0')}</span>
+              <h2>{step.title}</h2>
+              <p>{step.body}</p>
+              <ul>
+                {step.bullets.map((bullet) => (
+                  <li key={bullet}>{bullet}</li>
+                ))}
+              </ul>
+            </div>
+            <figure className="docs-step-figure">
+              <img
+                src={step.image}
+                alt={step.alt}
+                loading={index === 0 ? 'eager' : 'lazy'}
+                decoding="async"
+              />
+            </figure>
+          </article>
+        ))}
+      </section>
+
+      <section className="docs-deploy-note">
+        <div>
+          <p className="eyebrow">Deployment</p>
+          <h2>GitHub Pages</h2>
+        </div>
+        <p>
+          Pushes to <code>main</code> run the Pages workflow, build the Vite app, and publish the
+          generated <code>dist</code> folder. In GitHub, keep <code>Settings &gt; Pages &gt; Source</code>
+          {' '}
+          set to <code>GitHub Actions</code>.
+        </p>
       </section>
     </AppFrame>
   )
@@ -3630,6 +3825,7 @@ function App() {
       <BrowserRouter basename={import.meta.env.BASE_URL}>
         <Routes>
           <Route path="/" element={<HomePage tournaments={tournaments} onDeleteTournament={deleteTournament} />} />
+          <Route path="/docs" element={<DocsPage />} />
           <Route
             path="/tournaments/new"
             element={<TournamentWizard onCreateTournament={createTournament} />}

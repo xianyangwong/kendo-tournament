@@ -5,6 +5,11 @@ Web application for creating, tracking, and revisiting kendo tournaments with pe
 ## User Guide
 
 See the step-by-step website guide with screenshots in [docs/user-guide.md](docs/user-guide.md).
+After deployment, the same guide is available in the app at `/docs`:
+
+```text
+https://xianyangwong.github.io/kendo-tournament/docs
+```
 
 ## Features
 
@@ -51,6 +56,12 @@ Expected Pages URL:
 
 ```text
 https://xianyangwong.github.io/kendo-tournament/
+```
+
+Published docs URL:
+
+```text
+https://xianyangwong.github.io/kendo-tournament/docs
 ```
 
 In GitHub, set `Settings > Pages > Source` to `GitHub Actions`.

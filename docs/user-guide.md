@@ -2,6 +2,8 @@
 
 This guide walks through the main website flow: creating a tournament, adding entrants, running the bracket, and returning to saved tournaments. The app stores tournaments in the browser's local storage, so each device and browser keeps its own tournament list.
 
+After deployment, this guide is also available inside the website at `https://xianyangwong.github.io/kendo-tournament/docs`.
+
 ## 1. Open The Tournament Desk
 
 Open the website and start from the tournament desk. This page shows saved tournaments grouped by status:
@@ -94,5 +96,6 @@ Deployment behavior:
 - The workflow uploads the generated `dist` folder to GitHub Pages.
 - The configured Vite base path is `/kendo-tournament/`, matching the repository Pages URL.
 - The expected public URL is `https://xianyangwong.github.io/kendo-tournament/`.
+- The published website guide URL is `https://xianyangwong.github.io/kendo-tournament/docs`.
 
 In GitHub, make sure the repository Pages source is set to `GitHub Actions` under `Settings > Pages`.
