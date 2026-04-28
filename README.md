@@ -2,6 +2,10 @@
 
 Web application for creating, tracking, and revisiting kendo tournaments with persistent local storage and live bracket visuals.
 
+## User Guide
+
+See the step-by-step website guide with screenshots in [docs/user-guide.md](docs/user-guide.md).
+
 ## Features
 
 - Home page with current and past tournament lists
@@ -37,6 +41,19 @@ The Vite dev server usually starts at `http://localhost:5173`.
 ```bash
 npm run build
 ```
+
+## GitHub Pages
+
+This repository includes a GitHub Actions workflow at `.github/workflows/deploy-pages.yml`.
+Pushes to `main` build the Vite app and deploy `dist` to GitHub Pages.
+
+Expected Pages URL:
+
+```text
+https://xianyangwong.github.io/kendo-tournament/
+```
+
+In GitHub, set `Settings > Pages > Source` to `GitHub Actions`.
 
 ## Stack
 
