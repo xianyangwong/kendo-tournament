@@ -4636,7 +4636,7 @@ input[readonly] {
   color: var(--ink-faint);
 }
 
-.match-timer:has(.match-timer-phase) {
+.match-timer.is-encho {
   border-color: color-mix(in oklch, var(--shu) 38%, var(--rule));
   background: color-mix(in oklch, var(--shu-faint) 42%, var(--washi));
 }
@@ -5011,6 +5011,7 @@ body.scoreboard-body {
 
   .graph-modal {
     width: 100%;
+    max-height: 100vh;
     max-height: 100dvh;
     border-radius: 0;
     border-inline: 0;

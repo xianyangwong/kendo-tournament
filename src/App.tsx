@@ -825,8 +825,19 @@ function MatchTimer({
     }
   }, [isRunning, remaining, onExpire])
 
+  const timerClassName = [
+    'match-timer',
+    expired ? 'is-expired' : '',
+    isRunning ? 'is-running' : '',
+    disabled && !isRunning ? 'is-disabled' : '',
+    compact ? 'is-compact' : '',
+    isEncho ? 'is-encho' : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
+
   return (
-    <div className={`match-timer${expired ? ' is-expired' : ''}${isRunning ? ' is-running' : ''}${disabled && !isRunning ? ' is-disabled' : ''}${compact ? ' is-compact' : ''}`}>
+    <div className={timerClassName}>
       {isEncho ? (
         <span className="match-timer-phase">
           <span aria-hidden="true">延長</span>

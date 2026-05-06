@@ -37,40 +37,35 @@
 }
 
 :root {
-  /* Ground: washi paper, defined in OKLCH for perceptual steps. */
-  --washi: oklch(93% 0.026 83);
-  --washi-soft: oklch(89% 0.028 82);
-  --washi-deep: oklch(83% 0.032 80);
-  --washi-edge: oklch(76% 0.035 78);
+  /* Legacy-safe palette first; modern OKLCH values are opt-in below. */
+  --washi: #f0e7d5;
+  --washi-soft: #e4d9c6;
+  --washi-deep: #d2c6b1;
+  --washi-edge: #beaf99;
 
-  /* Text: sumi ink, warm-tinted instead of a neutral absolute. */
-  --sumi: oklch(18% 0.025 62);
-  --sumi-soft: oklch(25% 0.035 62);
-  --ink-mid: oklch(37% 0.043 64);
-  --ink-soft: oklch(50% 0.055 65);
-  --ink-faint: oklch(63% 0.048 66);
+  --sumi: #1a0f06;
+  --sumi-soft: #2e1e0f;
+  --ink-mid: #503b27;
+  --ink-soft: #795d41;
+  --ink-faint: #9e846b;
 
-  /* Shu: controlled vermillion for live decisions. */
-  --shu: oklch(50% 0.17 35);
-  --shu-deep: oklch(39% 0.145 35);
-  --shu-bright: oklch(60% 0.18 35);
-  --shu-pale: color-mix(in oklch, var(--shu) 17%, transparent);
-  --shu-faint: color-mix(in oklch, var(--shu) 8%, transparent);
+  --shu: #af2f09;
+  --shu-deep: #7f1a00;
+  --shu-bright: #d64c29;
+  --shu-pale: rgba(175, 47, 9, 0.17);
+  --shu-faint: rgba(175, 47, 9, 0.08);
 
-  /* Hakama indigo for structure and secondary states. */
-  --indigo: oklch(42% 0.105 266);
-  --indigo-deep: oklch(31% 0.082 265);
-  --indigo-soft: color-mix(in oklch, var(--indigo) 17%, transparent);
+  --indigo: #324986;
+  --indigo-deep: #1b2e59;
+  --indigo-soft: rgba(50, 73, 134, 0.17);
 
-  --moss: oklch(48% 0.075 145);
-  --gold: oklch(70% 0.11 80);
+  --moss: #416943;
+  --gold: #c29647;
 
-  /* Lines and shadows. */
-  --rule: color-mix(in oklch, var(--sumi) 17%, transparent);
-  --rule-soft: color-mix(in oklch, var(--sumi) 9%, transparent);
-  --shadow-paper: 0 1px 0 color-mix(in oklch, var(--washi) 92%, oklch(98% 0.01 83)) inset,
-    0 2px 10px color-mix(in oklch, var(--sumi) 10%, transparent);
-  --shadow-deep: 0 16px 40px color-mix(in oklch, var(--sumi) 18%, transparent);
+  --rule: rgba(26, 15, 6, 0.17);
+  --rule-soft: rgba(26, 15, 6, 0.09);
+  --shadow-paper: 0 1px 0 rgba(240, 231, 213, 0.92) inset, 0 2px 10px rgba(26, 15, 6, 0.1);
+  --shadow-deep: 0 16px 40px rgba(26, 15, 6, 0.18);
 
   /* Type system. */
   --display: 'Kendo Mincho Local', 'Hiragino Mincho ProN', 'Yu Mincho', 'Songti SC', Georgia, serif;
@@ -115,6 +110,45 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+@supports (color: oklch(50% 0.1 40)) and (color: color-mix(in oklch, white 50%, transparent)) {
+  :root {
+    /* Ground: washi paper, defined in OKLCH for perceptual steps. */
+    --washi: oklch(93% 0.026 83);
+    --washi-soft: oklch(89% 0.028 82);
+    --washi-deep: oklch(83% 0.032 80);
+    --washi-edge: oklch(76% 0.035 78);
+
+    /* Text: sumi ink, warm-tinted instead of a neutral absolute. */
+    --sumi: oklch(18% 0.025 62);
+    --sumi-soft: oklch(25% 0.035 62);
+    --ink-mid: oklch(37% 0.043 64);
+    --ink-soft: oklch(50% 0.055 65);
+    --ink-faint: oklch(63% 0.048 66);
+
+    /* Shu: controlled vermillion for live decisions. */
+    --shu: oklch(50% 0.17 35);
+    --shu-deep: oklch(39% 0.145 35);
+    --shu-bright: oklch(60% 0.18 35);
+    --shu-pale: color-mix(in oklch, var(--shu) 17%, transparent);
+    --shu-faint: color-mix(in oklch, var(--shu) 8%, transparent);
+
+    /* Hakama indigo for structure and secondary states. */
+    --indigo: oklch(42% 0.105 266);
+    --indigo-deep: oklch(31% 0.082 265);
+    --indigo-soft: color-mix(in oklch, var(--indigo) 17%, transparent);
+
+    --moss: oklch(48% 0.075 145);
+    --gold: oklch(70% 0.11 80);
+
+    /* Lines and shadows. */
+    --rule: color-mix(in oklch, var(--sumi) 17%, transparent);
+    --rule-soft: color-mix(in oklch, var(--sumi) 9%, transparent);
+    --shadow-paper: 0 1px 0 color-mix(in oklch, var(--washi) 92%, oklch(98% 0.01 83)) inset,
+      0 2px 10px color-mix(in oklch, var(--sumi) 10%, transparent);
+    --shadow-deep: 0 16px 40px color-mix(in oklch, var(--sumi) 18%, transparent);
+  }
 }
 
 * {
